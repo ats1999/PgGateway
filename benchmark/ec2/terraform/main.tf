@@ -55,7 +55,6 @@ resource "aws_instance" "bench" {
 
   ami                    = data.aws_ssm_parameter.ubuntu_ami.value
   instance_type          = var.instance_type
-  key_name               = var.key_name
   vpc_security_group_ids = [aws_security_group.bench.id]
 
   tags = {
