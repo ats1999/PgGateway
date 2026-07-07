@@ -1,0 +1,3 @@
+-- Minimal overhead: pure connection+protocol round-trip, no backend work.
+-- Stresses the pooler's protocol parsing and connection dispatch.
+SELECT 1;

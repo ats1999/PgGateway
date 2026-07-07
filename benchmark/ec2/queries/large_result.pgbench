@@ -1,0 +1,6 @@
+-- Large result set: pooler must stream/buffer many rows per query.
+-- Tests memory pressure and throughput of the pooler's response path.
+-- pgbench_accounts has 100,000 * scale rows; LIMIT 5000 returns ~400KB per call.
+SELECT aid, bid, abalance, filler
+FROM pgbench_accounts
+LIMIT 5000;

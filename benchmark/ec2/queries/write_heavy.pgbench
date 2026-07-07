@@ -1,0 +1,4 @@
+-- Write-heavy: high INSERT throughput.
+-- bench_writes is UNLOGGED to avoid WAL overhead; tests raw write path.
+-- The pooler sees short transactions that complete quickly, maximizing connection reuse.
+INSERT INTO bench_writes(val) VALUES (random()::text);
