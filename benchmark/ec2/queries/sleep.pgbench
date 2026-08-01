@@ -1,6 +1,0 @@
--- Long-held connection: each query holds the backend connection for :sleep_ms ms.
--- With clients > pool_size this forces pool queueing.
--- In transaction mode the connection is held only during the sleep.
--- In session mode it's held for the entire client session.
--- Pass --define sleep_ms=100 (or any value) on the pgbench command line.
-SELECT pg_sleep(:sleep_ms / 1000.0);

@@ -1,4 +1,0 @@
--- Indexed point lookup: sub-millisecond Postgres execution.
--- Maximises TPS — good for measuring pooler overhead at high connection rates.
-\set aid random(1, 100000 * :scale)
-SELECT abalance FROM pgbench_accounts WHERE aid = :aid;
