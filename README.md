@@ -17,7 +17,7 @@ PgGateway is a PostgreSQL-aware proxy that sits between applications and Postgre
 ## Crates
 
 - **`pg-protocol`** — wire framing, startup packets, typed client/server streams, session relay.
-- **`pg-gateway`** — minimal pass-through proxy using `pg-protocol`.
+- **`pg-gateway`** — pass-through proxy with session pooling using `pg-protocol`.
 
 ## Run
 
@@ -25,10 +25,53 @@ PgGateway is a PostgreSQL-aware proxy that sits between applications and Postgre
 cargo run -p pg-gateway
 ```
 
+### Configuration (YAML)
+
+Set `PG_GATEWAY_CONFIG` to a YAML file, or rely on defaults (listen `127.0.0.1:6432`, database `postgres` → `127.0.0.1:5432`).
+
+Example (`pg-gateway.example.yaml`):
+
+```yaml
+listen: "127.0.0.1:6432"
+
+databases:
+  postgres:
+    primary:
+      host: 127.0.0.1
+      port: 5432
+    replicas:
+      - host: 127.0.0.1
+        port: 5433
+    pool:
+      max_connections: 50   # reserved for future enforcement
+
+users:
+  - name: postgres
+    database: postgres
+    password: postgres      # reserved for future pooler auth
+```
+
+Client startup **`database`** must match a key under `databases`. Pooling uses each database’s **primary** today; **replicas** are configured but not routed yet. If **`users`** is non-empty, only listed `(name, database)` pairs may connect; an empty list allows any user (dev default).
+
+```bash
+PG_GATEWAY_CONFIG=pg-gateway.example.yaml cargo run -p pg-gateway
+```
+
+**Pooling** is always on: one idle queue per `(user, database)`. Acquire reuses idle or opens a new connection to that database’s primary; release runs `DISCARD ALL`.
+
+### Library
+
+```rust
+use pg_gateway::{Gateway, GatewayConfig};
+
+let config = GatewayConfig::from_yaml_file("pg-gateway.yaml")?;
+let gateway = Gateway::new(config)?;
+gateway.run().await?;
+```
+
 Environment:
 
-- `PG_GATEWAY_LISTEN` — default `127.0.0.1:6432`
-- `PG_GATEWAY_UPSTREAM` — default `127.0.0.1:5432`
+- `PG_GATEWAY_CONFIG` — path to YAML config (optional)
 
 Connect with `psql` through the gateway:
 

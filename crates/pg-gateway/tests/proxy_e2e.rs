@@ -1,9 +1,13 @@
 //! End-to-end: client → pg-gateway → mock upstream Postgres.
 
+#[path = "common/mod.rs"]
+mod common;
+
 use std::time::Duration;
 
+use pg_gateway::Gateway;
 use pg_protocol::{read_backend, read_frontend, read_startup_request, StartupRequest};
-use pg_gateway::serve_connection;
+use common::config_with_primary;
 use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::time::timeout;
@@ -18,9 +22,7 @@ async fn proxy_forwards_startup_and_simple_query() {
         let startup = read_startup_request(&mut upstream).await.unwrap();
         assert!(matches!(startup, StartupRequest::Startup(_)));
 
-        // AuthenticationOk
         upstream.write_all(&backend_message(b'R', &[0, 0, 0, 0])).await.unwrap();
-        // BackendKeyData pid=1 secret=2
         upstream
             .write_all(&backend_message(
                 b'K',
@@ -28,12 +30,10 @@ async fn proxy_forwards_startup_and_simple_query() {
             ))
             .await
             .unwrap();
-        // ParameterStatus
         upstream
             .write_all(&backend_message(b'S', b"server_version\0129.0\012"))
             .await
             .unwrap();
-        // ReadyForQuery
         upstream
             .write_all(&backend_message(b'Z', b"I"))
             .await
@@ -52,26 +52,28 @@ async fn proxy_forwards_startup_and_simple_query() {
             .unwrap();
     });
 
-    let gateway = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let gateway_addr = gateway.local_addr().unwrap();
-    let upstream = mock_addr.to_string();
+    let gateway_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let gateway_addr = gateway_listener.local_addr().unwrap();
+
+    let config = config_with_primary(&gateway_addr.to_string(), "postgres", &mock_addr.to_string());
+    let gateway = Gateway::new(config).unwrap();
 
     let gateway_task = tokio::spawn(async move {
-        let (client, peer) = gateway.accept().await.unwrap();
-        serve_connection(client, peer, &upstream).await.unwrap();
+        let (client, peer) = gateway_listener.accept().await.unwrap();
+        gateway.serve(client, peer).await.unwrap();
     });
 
     let mut client = TcpStream::connect(gateway_addr).await.unwrap();
 
     let mut params = Vec::new();
-    params.extend_from_slice(b"user\0test\0\0");
+    params.extend_from_slice(b"user\0test\0database\0postgres\0\0");
     let startup = startup_packet(3 << 16, &params);
     client.write_all(&startup).await.unwrap();
 
     let auth = read_backend(&mut client).await.unwrap();
     assert_eq!(auth.tag(), b'R');
-    let _ = read_backend(&mut client).await.unwrap(); // K
-    let _ = read_backend(&mut client).await.unwrap(); // S
+    let _ = read_backend(&mut client).await.unwrap();
+    let _ = read_backend(&mut client).await.unwrap();
     let rfq = read_backend(&mut client).await.unwrap();
     assert_eq!(rfq.tag(), b'Z');
 

@@ -11,11 +11,15 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1"
+bytes = "1"
 pg-protocol = { path = "../pg-protocol" }
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [dev-dependencies]
 pg-protocol = { path = "../pg-protocol" }
+serde_yaml = "0.9"
 tokio = { version = "1", features = ["full"] }
