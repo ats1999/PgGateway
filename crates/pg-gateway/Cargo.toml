@@ -1,0 +1,21 @@
+[package]
+name = "pg-gateway"
+description = "PostgreSQL proxy gateway"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "pg-gateway"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+pg-protocol = { path = "../pg-protocol" }
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+pg-protocol = { path = "../pg-protocol" }
+tokio = { version = "1", features = ["full"] }
