@@ -2,6 +2,8 @@
 
 PgGateway is a PostgreSQL-aware proxy that sits between applications and Postgres (primary + replicas). Clients connect to the gateway; it speaks the Postgres wire protocol and manages upstream connections, routing, and policy.
 
+> ## 🚧 Work in Progress - PgGateway is not yet ready for use.
+
 ## Features
 
 - **Connection pooler** — reuse upstream connections to many client sessions
@@ -14,8 +16,6 @@ PgGateway is a PostgreSQL-aware proxy that sits between applications and Postgre
 - **Connection pooling modes** — **session**, **transaction**, and **statement** pooling, plus **`mode=auto`** to pick a mode per connection from usage (e.g. enter transaction pooling when a transaction starts; requires query parsing)
 - **Health checks** — readiness/liveness for the gateway and upstream nodes
 
-## Progress
-Currently, work is in progress for postgres protocol implementation and connection pooler.
 ## Crates
 
 - **`pg-protocol`** — wire framing, startup packets, typed client/server streams, session relay.
