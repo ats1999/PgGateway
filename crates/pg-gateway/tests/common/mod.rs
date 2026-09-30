@@ -16,7 +16,7 @@ pub fn config_with_primary(listen: &str, database: &str, upstream: &str) -> Gate
     GatewayConfig {
         listen: listen.to_string(),
         databases,
-        users: Vec::new(),
+        userlist: Vec::new(),
     }
 }
 

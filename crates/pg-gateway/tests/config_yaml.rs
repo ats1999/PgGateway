@@ -14,7 +14,7 @@ databases:
         port: 5432
     pool:
       max_connections: 40
-users:
+userlist:
   - name: app
     database: postgres
     password: secret
@@ -27,7 +27,7 @@ users:
         config.databases["postgres"].pool.max_connections,
         Some(40)
     );
-    assert_eq!(config.users.len(), 1);
+    assert_eq!(config.userlist.len(), 1);
     assert_eq!(config.primary_upstream("postgres").unwrap(), "db-primary:5432");
 }
 
@@ -56,7 +56,7 @@ databases:
     primary:
       host: h
       port: 5432
-users:
+userlist:
   - name: alice
     database: postgres
 "#;

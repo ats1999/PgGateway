@@ -14,7 +14,7 @@ async fn main() -> anyhow::Result<()> {
     info!(
         listen = %config.listen,
         databases = config.databases.len(),
-        users = config.users.len(),
+        userlist = config.userlist.len(),
         "starting pg-gateway"
     );
 

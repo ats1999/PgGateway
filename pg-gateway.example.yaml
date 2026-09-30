@@ -11,7 +11,7 @@ databases:
     pool:
       max_connections: 50
 
-users:
+userlist:
   - name: postgres
     database: postgres
     password: postgres

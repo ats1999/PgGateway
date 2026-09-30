@@ -39,7 +39,7 @@ impl Gateway {
         info!(
             listen = %self.config.listen,
             ?database_names,
-            users = self.config.users.len(),
+            userlist = self.config.userlist.len(),
             "pg-gateway listening"
         );
 

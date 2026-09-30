@@ -47,13 +47,13 @@ databases:
     pool:
       max_connections: 50   # reserved for future enforcement
 
-users:
+userlist:
   - name: postgres
     database: postgres
     password: postgres      # reserved for future pooler auth
 ```
 
-Client startup **`database`** must match a key under `databases`. Pooling uses each database’s **primary** today; **replicas** are configured but not routed yet. If **`users`** is non-empty, only listed `(name, database)` pairs may connect; an empty list allows any user (dev default).
+Client startup **`database`** must match a key under `databases`. Pooling uses each database’s **primary** today; **replicas** are configured but not routed yet. If **`userlist`** is non-empty, only listed `(name, database)` pairs may connect; an empty list allows any user (dev default).
 
 ```bash
 PG_GATEWAY_CONFIG=pg-gateway.example.yaml cargo run -p pg-gateway

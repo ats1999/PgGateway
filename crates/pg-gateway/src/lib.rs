@@ -16,7 +16,7 @@
 //!               host: 127.0.0.1
 //!               port: 5432
 //!             replicas: []
-//!         users:
+//!         userlist:
 //!           - name: postgres
 //!             database: postgres
 //!         "#,

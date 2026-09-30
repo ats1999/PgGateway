@@ -15,7 +15,7 @@ pub struct GatewayConfig {
     #[serde(default = "default_databases")]
     pub databases: BTreeMap<String, DatabaseCluster>,
     #[serde(default)]
-    pub users: Vec<UserEntry>,
+    pub userlist: Vec<UserEntry>,
 }
 
 /// Logical database: one primary and zero or more read replicas (replicas unused until routing exists).
@@ -60,7 +60,7 @@ impl Default for GatewayConfig {
         Self {
             listen: default_listen(),
             databases: default_databases(),
-            users: Vec::new(),
+            userlist: Vec::new(),
         }
     }
 }
@@ -116,12 +116,12 @@ impl GatewayConfig {
         Ok(self.cluster(database)?.replicas.as_slice())
     }
 
-    /// When `users` is empty, all client users are allowed (dev convenience).
+    /// When `userlist` is empty, all client users are allowed (dev convenience).
     pub fn allows_client(&self, user: &str, database: &str) -> bool {
-        if self.users.is_empty() {
+        if self.userlist.is_empty() {
             return true;
         }
-        self.users
+        self.userlist
             .iter()
             .any(|entry| entry.name == user && entry.database == database)
     }
