@@ -7,18 +7,16 @@
 //!
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
-//!     let config = GatewayConfig::from_yaml_str(
+//!     let config = GatewayConfig::from_hcl_str(
 //!         r#"
-//!         listen: "127.0.0.1:6432"
-//!         databases:
-//!           postgres:
-//!             primary:
-//!               host: 127.0.0.1
-//!               port: 5432
-//!             replicas: []
-//!         userlist:
-//!           - name: postgres
-//!             database: postgres
+//!         listen = "127.0.0.1:6432"
+//!         databases = {
+//!           postgres = {
+//!             primary = { host = "127.0.0.1", port = 5432 }
+//!             replicas = []
+//!           }
+//!         }
+//!         userlist = [{ name = "postgres", database = "postgres" }]
 //!         "#,
 //!     )?;
 //!     let gateway = Gateway::new(config)?;

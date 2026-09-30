@@ -11,12 +11,12 @@ pub fn config_with_primary(listen: &str, database: &str, upstream: &str) -> Gate
             primary: HostPort { host, port },
             replicas: Vec::new(),
             pool: Default::default(),
+            userlist: Vec::new(),
         },
     );
     GatewayConfig {
         listen: listen.to_string(),
         databases,
-        userlist: Vec::new(),
     }
 }
 

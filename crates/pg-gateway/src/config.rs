@@ -7,15 +7,13 @@ use serde::{Deserialize, Serialize};
 const DEFAULT_LISTEN: &str = "127.0.0.1:6432";
 const DEFAULT_PG_PORT: u16 = 5432;
 
-/// Top-level gateway configuration (YAML-serializable).
+/// Top-level gateway configuration (HashiCorp HCL-serializable).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GatewayConfig {
     #[serde(default = "default_listen")]
     pub listen: String,
     #[serde(default = "default_databases")]
     pub databases: BTreeMap<String, DatabaseCluster>,
-    #[serde(default)]
-    pub userlist: Vec<UserEntry>,
 }
 
 /// Logical database: one primary and zero or more read replicas (replicas unused until routing exists).
@@ -26,6 +24,8 @@ pub struct DatabaseCluster {
     pub replicas: Vec<HostPort>,
     #[serde(default)]
     pub pool: PoolSettings,
+    #[serde(default)]
+    pub userlist: Vec<UserEntry>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -48,7 +48,6 @@ pub struct PoolSettings {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct UserEntry {
     pub name: String,
-    pub database: String,
     #[serde(default)]
     pub password: Option<String>,
     #[serde(default)]
@@ -60,7 +59,6 @@ impl Default for GatewayConfig {
         Self {
             listen: default_listen(),
             databases: default_databases(),
-            userlist: Vec::new(),
         }
     }
 }
@@ -72,21 +70,21 @@ impl HostPort {
 }
 
 impl GatewayConfig {
-    pub fn from_yaml_file(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+    pub fn from_hcl_file(path: impl AsRef<Path>) -> anyhow::Result<Self> {
         let text = std::fs::read_to_string(path.as_ref())
             .with_context(|| format!("read config {}", path.as_ref().display()))?;
-        Self::from_yaml_str(&text)
+        Self::from_hcl_str(&text)
     }
 
-    pub fn from_yaml_str(yaml: &str) -> anyhow::Result<Self> {
-        let config: Self = serde_yaml::from_str(yaml).context("parse gateway config yaml")?;
+    pub fn from_hcl_str(hcl_config: &str) -> anyhow::Result<Self> {
+        let config: Self = hcl::from_str(hcl_config).context("parse gateway config hcl")?;
         config.validate()?;
         Ok(config)
     }
 
     pub fn load() -> anyhow::Result<Self> {
         match std::env::var("PG_GATEWAY_CONFIG") {
-            Ok(path) => Self::from_yaml_file(path),
+            Ok(path) => Self::from_hcl_file(path),
             Err(_) => {
                 let config = Self::default();
                 config.validate()?;
@@ -118,12 +116,18 @@ impl GatewayConfig {
 
     /// When `userlist` is empty, all client users are allowed (dev convenience).
     pub fn allows_client(&self, user: &str, database: &str) -> bool {
-        if self.userlist.is_empty() {
-            return true;
+        let cluster = match self.databases.get(database) {
+            Some(cluster) => cluster,
+            None => return false,
+        };
+
+        if cluster.userlist.is_empty() {
+            return false;
         }
-        self.userlist
+
+        cluster.userlist
             .iter()
-            .any(|entry| entry.name == user && entry.database == database)
+            .any(|entry| entry.name == user)
     }
 }
 
@@ -146,6 +150,7 @@ fn default_databases() -> BTreeMap<String, DatabaseCluster> {
             },
             replicas: Vec::new(),
             pool: PoolSettings::default(),
+            userlist: Vec::new(),
         },
     );
     map

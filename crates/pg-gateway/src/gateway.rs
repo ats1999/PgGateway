@@ -35,11 +35,8 @@ impl Gateway {
         let listener = TcpListener::bind(&self.config.listen)
             .await
             .with_context(|| format!("bind {}", self.config.listen))?;
-        let database_names: Vec<_> = self.config.databases.keys().cloned().collect();
         info!(
             listen = %self.config.listen,
-            ?database_names,
-            userlist = self.config.userlist.len(),
             "pg-gateway listening"
         );
 

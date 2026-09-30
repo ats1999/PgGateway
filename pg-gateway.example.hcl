@@ -1,0 +1,21 @@
+listen = "127.0.0.1:6432"
+
+databases = {
+  postgres = {
+    primary = {
+      host = "127.0.0.1"
+      port = 5432
+    }
+    
+    replicas = [{ host = "127.0.0.1", port = 5433 }]
+    
+    pool     = { max_connections = 50 }
+
+    userlist = [{
+      name     = "postgres"
+      password = "postgres"
+    }]
+  }
+}
+
+

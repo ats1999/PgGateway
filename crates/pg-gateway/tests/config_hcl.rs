@@ -1,25 +1,19 @@
 use pg_gateway::GatewayConfig;
 
 #[test]
-fn yaml_round_trip() {
-    let yaml = r#"
-listen: "0.0.0.0:6432"
-databases:
-  postgres:
-    primary:
-      host: db-primary
-      port: 5432
-    replicas:
-      - host: db-replica
-        port: 5432
-    pool:
-      max_connections: 40
-userlist:
-  - name: app
-    database: postgres
-    password: secret
+fn hcl_round_trip() {
+    let hcl_config = r#"
+listen = "0.0.0.0:6432"
+databases = {
+  postgres = {
+    primary = { host = "db-primary", port = 5432 }
+    replicas = [{ host = "db-replica", port = 5432 }]
+    pool = { max_connections = 40 }
+    userlist = [{ name = "app", database = "postgres", password = "secret" }]
+  }
+}
 "#;
-    let config = GatewayConfig::from_yaml_str(yaml).unwrap();
+    let config = GatewayConfig::from_hcl_str(hcl_config).unwrap();
     assert_eq!(config.listen, "0.0.0.0:6432");
     assert_eq!(config.databases["postgres"].primary.host, "db-primary");
     assert_eq!(config.databases["postgres"].replicas.len(), 1);
@@ -27,13 +21,13 @@ userlist:
         config.databases["postgres"].pool.max_connections,
         Some(40)
     );
-    assert_eq!(config.userlist.len(), 1);
+    assert_eq!(config.databases["postgres"].userlist.len(), 1);
     assert_eq!(config.primary_upstream("postgres").unwrap(), "db-primary:5432");
 }
 
 #[test]
 fn defaults_when_fields_omitted() {
-    let config = GatewayConfig::from_yaml_str("{}").unwrap();
+    let config = GatewayConfig::from_hcl_str("").unwrap();
     assert_eq!(config.listen, "127.0.0.1:6432");
     assert!(config.databases.contains_key("postgres"));
     assert_eq!(
@@ -50,17 +44,13 @@ fn rejects_unknown_database_lookup() {
 
 #[test]
 fn user_allowlist() {
-    let yaml = r#"
-databases:
-  postgres:
-    primary:
-      host: h
-      port: 5432
-userlist:
-  - name: alice
-    database: postgres
+    let hcl_config = r#"
+databases = {
+  postgres = { primary = { host = "h", port = 5432 } }
+}
+userlist = [{ name = "alice", database = "postgres" }]
 "#;
-    let config = GatewayConfig::from_yaml_str(yaml).unwrap();
+    let config = GatewayConfig::from_hcl_str(hcl_config).unwrap();
     assert!(config.allows_client("alice", "postgres"));
     assert!(!config.allows_client("bob", "postgres"));
 }

@@ -31,32 +31,34 @@ cargo run -p pg-gateway
 
 Set `PG_GATEWAY_CONFIG` to a YAML file, or rely on defaults (listen `127.0.0.1:6432`, database `postgres` → `127.0.0.1:5432`).
 
-Example (`pg-gateway.example.yaml`):
+Example (`pg-gateway.example.hcl`):
 
-```yaml
-listen: "127.0.0.1:6432"
+```hcl
+listen = "127.0.0.1:6432"
 
-databases:
-  postgres:
-    primary:
-      host: 127.0.0.1
-      port: 5432
-    replicas:
-      - host: 127.0.0.1
-        port: 5433
-    pool:
-      max_connections: 50   # reserved for future enforcement
+databases = {
+  postgres = {
+    primary = {
+      host = "127.0.0.1"
+      port = 5432
+    }
+    replicas = [{ host = "127.0.0.1", port = 5433 }]
+    pool = { max_connections = 50 } # reserved for future enforcement
+    userlist = [{
+      name = "postgres"
+      database = "postgres"
+      password = "postgres" # reserved for future pooler auth
+    }]
+  }
+}
 
-userlist:
-  - name: postgres
-    database: postgres
-    password: postgres      # reserved for future pooler auth
+
 ```
 
 Client startup **`database`** must match a key under `databases`. Pooling uses each database’s **primary** today; **replicas** are configured but not routed yet. If **`userlist`** is non-empty, only listed `(name, database)` pairs may connect; an empty list allows any user (dev default).
 
 ```bash
-PG_GATEWAY_CONFIG=pg-gateway.example.yaml cargo run -p pg-gateway
+PG_GATEWAY_CONFIG=pg-gateway.example.hcl cargo run -p pg-gateway
 ```
 
 **Pooling** is always on: one idle queue per `(user, database)`. Acquire reuses idle or opens a new connection to that database’s primary; release runs `DISCARD ALL`.
@@ -66,7 +68,7 @@ PG_GATEWAY_CONFIG=pg-gateway.example.yaml cargo run -p pg-gateway
 ```rust
 use pg_gateway::{Gateway, GatewayConfig};
 
-let config = GatewayConfig::from_yaml_file("pg-gateway.yaml")?;
+let config = GatewayConfig::from_hcl_file("pg-gateway.hcl")?;
 let gateway = Gateway::new(config)?;
 gateway.run().await?;
 ```
