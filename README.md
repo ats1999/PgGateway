@@ -46,7 +46,6 @@ databases = {
     pool = { max_connections = 50 } # reserved for future enforcement
     userlist = [{
       name = "postgres"
-      database = "postgres"
       password = "postgres" # reserved for future pooler auth
     }]
   }
