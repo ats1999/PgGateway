@@ -2,12 +2,15 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use anyhow::{bail, Context};
+use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::config::GatewayConfig;
 use crate::connection::{ClientConnection, ServerConnection};
-use crate::pool::PoolManager;
+use crate::pool::{ConnectionState, PoolManager, PooledServerConnection};
+use crate::statement_detector::{detect_transaction_status, TransactionStatus};
+use pg_protocol::{read_backend, write_backend, ProtocolError};
 
 /// Running gateway instance (library entry point).
 pub struct Gateway {
@@ -56,6 +59,94 @@ impl Gateway {
     }
 }
 
+/// Relay client↔server traffic while tracking transaction state via protocol-level detection.
+///
+/// Monitors ReadyForQuery (Z) messages from server to detect transaction status:
+/// - 'I' (Idle) → ConnectionState::Idle
+/// - 'T' (In Transaction) → ConnectionState::InTransaction
+/// - 'E' (Failed Transaction) → ConnectionState::InTransaction (keep pinned)
+async fn relay_with_transaction_tracking(
+    client: ClientConnection,
+    upstream: TcpStream,
+    checkout: &mut PooledServerConnection,
+) -> anyhow::Result<TcpStream> {
+    use pg_protocol::{read_frontend, write_frontend};
+
+    let (client_read, client_write) = client.into_split();
+    let (server_read, server_write) = upstream.into_split();
+
+    let mut client_read = client_read;
+    let mut client_write = client_write;
+    let mut server_read = server_read;
+    let mut server_write = server_write;
+
+    loop {
+        tokio::select! {
+            // Client to server
+            client_result = async {
+                match read_frontend(&mut client_read).await {
+                    Ok(msg) => {
+                        write_frontend(&mut server_write, &msg).await?;
+                        if msg.tag() == b'X' {
+                            Ok::<_, anyhow::Error>(Some(()))  // Terminate
+                        } else {
+                            Ok(None)
+                        }
+                    }
+                    Err(ProtocolError::UnexpectedEof) => Ok(Some(())),
+                    Err(e) => Err(e.into()),
+                }
+            } => {
+                if client_result?.is_some() {
+                    let _ = server_write.shutdown().await;
+                    break;
+                }
+            }
+
+            // Server to client - detect transaction status from ReadyForQuery
+            server_result = async {
+                match read_backend(&mut server_read).await {
+                    Ok(msg) => {
+                        // Track transaction status from ReadyForQuery messages
+                        if msg.tag() == b'Z' {
+                            if let Some(status) = detect_transaction_status(&msg.raw) {
+                                let new_state = match status {
+                                    TransactionStatus::Idle => ConnectionState::Idle,
+                                    TransactionStatus::InTransaction => ConnectionState::InTransaction,
+                                    TransactionStatus::FailedTransaction => ConnectionState::InTransaction,
+                                };
+
+                                if new_state != checkout.state {
+                                    debug!(
+                                        from = ?checkout.state,
+                                        to = ?new_state,
+                                        "connection state changed"
+                                    );
+                                    checkout.state = new_state;
+                                }
+                            }
+                        }
+
+                        write_backend(&mut client_write, &msg).await?;
+                        Ok::<_, anyhow::Error>(false)
+                    }
+                    Err(ProtocolError::UnexpectedEof) => Ok(true),
+                    Err(e) => Err(e.into()),
+                }
+            } => {
+                if server_result? {
+                    let _ = client_write.shutdown().await;
+                    break;
+                }
+            }
+        }
+    }
+
+    server_read
+        .reunite(server_write)
+        .map_err(|_| anyhow::anyhow!("reunite upstream after relay"))
+}
+
 pub async fn serve_connection(
     stream: TcpStream,
     peer: SocketAddr,
@@ -77,7 +168,7 @@ pub async fn serve_connection(
         .primary_upstream(&identity.database)
         .with_context(|| format!("resolve primary for database `{}`", identity.database))?;
 
-    let (upstream, checkout) = if let Some(mut checkout) = gateway
+    let (upstream, mut checkout) = if let Some(mut checkout) = gateway
         .pools
         .try_acquire_idle(&identity.user, &identity.database)
         .await?
@@ -105,9 +196,7 @@ pub async fn serve_connection(
         (stream, checkout)
     };
 
-    let upstream = client.relay_with_upstream(upstream).await?;
-
+    let upstream = relay_with_transaction_tracking(client, upstream, &mut checkout).await?;
     checkout.release(upstream).await;
-
     Ok(())
 }

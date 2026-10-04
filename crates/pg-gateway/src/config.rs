@@ -7,6 +7,19 @@ use serde::{Deserialize, Serialize};
 const DEFAULT_LISTEN: &str = "127.0.0.1:6432";
 const DEFAULT_PG_PORT: u16 = 5432;
 
+/// Pool mode determines how connections are pinned and released.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum PoolMode {
+    /// Pin for entire session (never release to pool)
+    #[default]
+    Session,
+    /// Pin until statement completes
+    Statement,
+    /// Pin until transaction ends (COMMIT/ROLLBACK)
+    Transaction,
+}
+
 /// Top-level gateway configuration (HashiCorp HCL-serializable).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GatewayConfig {
@@ -23,7 +36,7 @@ pub struct DatabaseCluster {
     #[serde(default)]
     pub replicas: Vec<HostPort>,
     #[serde(default)]
-    pub pool: PoolSettings,
+    pub pool_config: PoolSettings,
     #[serde(default)]
     pub userlist: Vec<UserEntry>,
 }
@@ -42,6 +55,8 @@ pub struct PoolSettings {
     pub max_connections: Option<u32>,
     #[serde(default)]
     pub max_idle: Option<u32>,
+    #[serde(default)]
+    pub pool_mode: PoolMode,
 }
 
 /// Allowed client identity; password reserved for future pooler-side auth.
@@ -51,7 +66,7 @@ pub struct UserEntry {
     #[serde(default)]
     pub password: Option<String>,
     #[serde(default)]
-    pub pool: PoolSettings,
+    pub pool_config: PoolSettings,
 }
 
 impl Default for GatewayConfig {
@@ -149,7 +164,7 @@ fn default_databases() -> BTreeMap<String, DatabaseCluster> {
                 port: DEFAULT_PG_PORT,
             },
             replicas: Vec::new(),
-            pool: PoolSettings::default(),
+            pool_config: PoolSettings::default(),
             userlist: Vec::new(),
         },
     );

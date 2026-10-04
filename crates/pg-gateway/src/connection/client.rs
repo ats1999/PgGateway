@@ -12,6 +12,11 @@ use tokio::net::TcpStream;
 
 use crate::startup_parse::parse_startup_params;
 
+const AUTH_CLEARTEXT_PASSWORD: i32 = 3;
+const AUTH_MD5_PASSWORD: i32 = 5;
+const AUTH_SASL: i32 = 10;
+const AUTH_SASL_CONTINUE: i32 = 11;
+
 /// Client-facing side of a gateway session (Postgres client → gateway).
 pub struct ClientConnection {
     stream: TcpStream,
@@ -84,6 +89,16 @@ impl ClientConnection {
         Ok(Bytes::from(auth_flight))
     }
 
+    /// Consume this client connection and split into read/write halves
+    pub fn into_split(
+        self,
+    ) -> (
+        tokio::net::tcp::OwnedReadHalf,
+        tokio::net::tcp::OwnedWriteHalf,
+    ) {
+        self.stream.into_split()
+    }
+
     /// Bidirectional relay after startup/auth; returns the upstream socket for pool release.
     pub async fn relay_with_upstream(
         self,
@@ -126,7 +141,10 @@ fn auth_request_needs_password(raw: &[u8]) -> bool {
         return false;
     }
     let auth_type = i32::from_be_bytes([raw[5], raw[6], raw[7], raw[8]]);
-    auth_type != 0
+    matches!(
+        auth_type,
+        AUTH_CLEARTEXT_PASSWORD | AUTH_MD5_PASSWORD | AUTH_SASL | AUTH_SASL_CONTINUE
+    )
 }
 
 async fn read_startup_loop(client: &mut TcpStream) -> anyhow::Result<Vec<u8>> {
