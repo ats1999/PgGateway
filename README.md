@@ -13,7 +13,7 @@ PgGateway is a PostgreSQL-aware proxy that sits between applications and Postgre
 - **Multiple databases** — route many logical databases / upstream clusters from one gateway
 - **Query blocking** — deny or allow SQL by policy (blocklist / allowlist)
 - **Prepared statement support** — correct behavior across pool modes and route changes
-- **Connection pooling modes** — **session**, **transaction**, and **statement** pooling, plus **`mode=auto`** to pick a mode per connection from usage (e.g. enter transaction pooling when a transaction starts; requires query parsing)
+- **Connection pooling modes** — **session**, **transaction**, and **statement** pooling with explicit per-database configuration
 - **Health checks** — readiness/liveness for the gateway and upstream nodes
 
 ## Crates
@@ -27,9 +27,9 @@ PgGateway is a PostgreSQL-aware proxy that sits between applications and Postgre
 cargo run -p pg-gateway
 ```
 
-### Configuration (YAML)
+### Configuration (HCL)
 
-Set `PG_GATEWAY_CONFIG` to a YAML file, or rely on defaults (listen `127.0.0.1:6432`, database `postgres` → `127.0.0.1:5432`).
+Set `PG_GATEWAY_CONFIG` to an HCL file, or rely on defaults (listen `127.0.0.1:6432`, database `postgres` → `127.0.0.1:5432`).
 
 Example (`pg-gateway.example.hcl`):
 
@@ -42,16 +42,25 @@ databases = {
       host = "127.0.0.1"
       port = 5432
     }
+
     replicas = [{ host = "127.0.0.1", port = 5433 }]
-    pool = { max_connections = 50 } # reserved for future enforcement
+
+    # Pool configuration with explicit pooling mode
+    # pool_mode options: "session" (default), "transaction", "statement"
+    #   - session: Pin for entire session (never release to pool)
+    #   - transaction: Pin until COMMIT/ROLLBACK
+    #   - statement: Unpin after each statement completes
+    pool_config = {
+      max_connections = 50
+      pool_mode = "session"
+    }
+
     userlist = [{
-      name = "postgres"
-      password = "postgres" # reserved for future pooler auth
+      name     = "postgres"
+      password = "postgres"
     }]
   }
 }
-
-
 ```
 
 Client startup **`database`** must match a key under `databases`. Pooling uses each database’s **primary** today; **replicas** are configured but not routed yet. If **`userlist`** is non-empty, only listed `(name, database)` pairs may connect; an empty list allows any user (dev default).
@@ -60,7 +69,13 @@ Client startup **`database`** must match a key under `databases`. Pooling uses e
 PG_GATEWAY_CONFIG=pg-gateway.example.hcl cargo run -p pg-gateway
 ```
 
-**Pooling** is always on: one idle queue per `(user, database)`. Acquire reuses idle or opens a new connection to that database’s primary; release runs `DISCARD ALL`.
+**Connection Pooling Modes:**
+
+- **`session`** (default) — Connection pinned to client for entire session. Safest option, minimal connection reuse.
+- **`transaction`** — Connection pinned during transactions (BEGIN...COMMIT/ROLLBACK). Released after transaction ends. Best for OLTP workloads.
+- **`statement`** — Connection released after each statement. Maximum reuse but requires stateless workloads (no session variables, prepared statements).
+
+**How it works**: one idle queue per `(user, database)`. Acquire reuses idle connections matching the pool mode rules, or opens a new connection to the database’s primary; release resets connection state and decides whether to pin/unpin based on pool mode and transaction status.
 
 ### Library
 

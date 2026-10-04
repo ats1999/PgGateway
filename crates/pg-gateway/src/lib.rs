@@ -28,12 +28,17 @@ mod config;
 mod connection;
 mod gateway;
 mod pool;
+mod statement_detector;
 mod startup_parse;
 
 pub use config::{
-    DatabaseCluster, GatewayConfig, HostPort, PoolSettings, UserEntry,
+    DatabaseCluster, GatewayConfig, HostPort, PoolMode, PoolSettings, UserEntry,
 };
 pub use connection::{ClientConnection, ServerConnection, StartupIdentity};
 pub use gateway::{serve_connection, Gateway};
-pub use pool::{PoolKey, PoolManager, PooledServerConnection, UserDatabasePool};
+pub use pool::{ConnectionState, PoolKey, PoolManager, PooledServerConnection, UserDatabasePool};
 pub use startup_parse::{build_startup_packet, parse_startup_params};
+pub use statement_detector::{
+    detect_statement_type, detect_transaction_status, StatementType, TransactionOp,
+    TransactionStatus,
+};
