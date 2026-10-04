@@ -1,0 +1,32 @@
+
+  {
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "type": "lldb",
+        "request": "launch",
+        "name": "Debug pg-gateway",
+        "cargo": {
+          "args": ["build", "-p", "pg-gateway", "--bin=pg-gateway"],
+          "filter": { "name": "pg-gateway", "kind": "bin" }
+        },
+        "args": [],
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "PG_GATEWAY_LISTEN": "127.0.0.1:6432",
+          "PG_GATEWAY_UPSTREAM": "127.0.0.1:5432",
+          "RUST_LOG": "debug"
+        }
+      },
+      {
+        "type": "lldb",
+        "request": "launch",
+        "name": "Debug unit test",
+        "cargo": {
+          "args": ["test", "-p", "pg-gateway", "--no-run", "--test", "proxy_e2e"],
+          "filter": { "name": "proxy_e2e", "kind": "test" }
+        },
+        "args": ["proxy_forwards_startup_and_simple_query", "--nocapture"]
+      }
+    ]
+  }

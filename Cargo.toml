@@ -1,0 +1,8 @@
+[workspace]
+resolver = "2"
+members = ["crates/pg-protocol", "crates/pg-gateway"]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+license = "MIT"
