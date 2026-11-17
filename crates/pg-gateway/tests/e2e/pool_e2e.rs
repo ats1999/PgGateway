@@ -1,6 +1,6 @@
-//! Session pool reuses one upstream TCP connection per user/database key.
+//! In-process e2e: session pool reuses one upstream TCP connection per user/database key.
 
-#[path = "common/mod.rs"]
+#[path = "../common/mod.rs"]
 mod common;
 
 use std::sync::Arc;

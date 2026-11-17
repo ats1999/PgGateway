@@ -25,6 +25,9 @@ pub enum PoolMode {
 pub struct GatewayConfig {
     #[serde(default = "default_listen")]
     pub listen: String,
+    /// Virtual database name for admin SQL / `SHOW` commands (SQLite-backed, no upstream).
+    #[serde(default = "default_admin_database")]
+    pub admin_database: String,
     #[serde(default = "default_databases")]
     pub databases: BTreeMap<String, DatabaseCluster>,
 }
@@ -73,6 +76,7 @@ impl Default for GatewayConfig {
     fn default() -> Self {
         Self {
             listen: default_listen(),
+            admin_database: default_admin_database(),
             databases: default_databases(),
         }
     }
@@ -130,6 +134,15 @@ impl GatewayConfig {
     }
 
     /// When `userlist` is empty, all client users are allowed (dev convenience).
+    pub fn is_admin_database(&self, database: &str) -> bool {
+        database == self.admin_database
+    }
+
+    /// Admin console uses the same user rules as the default `postgres` logical database.
+    pub fn allows_admin_client(&self, user: &str) -> bool {
+        self.allows_client(user, "postgres")
+    }
+
     pub fn allows_client(&self, user: &str, database: &str) -> bool {
         let cluster = match self.databases.get(database) {
             Some(cluster) => cluster,
@@ -148,6 +161,10 @@ impl GatewayConfig {
 
 fn default_listen() -> String {
     DEFAULT_LISTEN.to_string()
+}
+
+fn default_admin_database() -> String {
+    "pgbouncer".to_string()
 }
 
 fn default_port() -> u16 {

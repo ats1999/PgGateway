@@ -72,8 +72,8 @@ PG_GATEWAY_CONFIG=pg-gateway.example.hcl cargo run -p pg-gateway
 **Connection Pooling Modes:**
 
 - **`session`** (default) — Upstream connection stays with one client for the whole session; after disconnect it is reset and returned to the pool for the next client.
-- **`transaction`** — Connection pinned during transactions (BEGIN...COMMIT/ROLLBACK). Released after transaction ends. Best for OLTP workloads.
-- **`statement`** — Connection released after each statement. Maximum reuse but requires stateless workloads (no session variables, prepared statements).
+- **`transaction`** — Server connection only for the current transaction (or single autocommit statement). Returned to the pool on `ReadyForQuery` idle; the client may get another server connection for the next transaction while staying connected.
+- **`statement`** — Same release timing as transaction (idle after each completed query). Treat workloads as stateless (no session-pinned prepared statements / `SET`).
 
 **How it works**: one idle queue per `(user, database)`. Acquire reuses idle connections matching the pool mode rules, or opens a new connection to the database’s primary; release resets connection state and decides whether to pin/unpin based on pool mode and transaction status.
 
@@ -90,6 +90,18 @@ gateway.run().await?;
 Environment:
 
 - `PG_GATEWAY_CONFIG` — path to YAML config (optional)
+
+### Admin console (SQLite-backed)
+
+Connect to the virtual database `pgbouncer` (name configurable via `admin_database` in HCL).  
+Queries run against an in-memory SQLite snapshot of pool state; answers use the normal Postgres wire format.
+
+```bash
+psql -h 127.0.0.1 -p 6432 -U postgres -d pgbouncer -c "SHOW POOLS;"
+psql -h 127.0.0.1 -p 6432 -U postgres -d pgbouncer -c "SELECT * FROM clients;"
+```
+
+Supported: `SHOW POOLS`, `SHOW CLIENTS`, `SHOW DATABASES`, `SHOW VERSION`, and read-only `SELECT` / `WITH` SQL.
 
 Connect with `psql` through the gateway:
 

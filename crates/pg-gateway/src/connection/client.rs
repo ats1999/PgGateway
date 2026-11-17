@@ -39,6 +39,10 @@ impl ClientConnection {
         self.peer
     }
 
+    pub(crate) fn stream_mut(&mut self) -> &mut TcpStream {
+        &mut self.stream
+    }
+
     /// Handles SSL/GSS negotiation and returns startup identity.
     pub async fn complete_startup(&mut self) -> anyhow::Result<StartupIdentity> {
         let raw = read_startup_loop(&mut self.stream).await?;

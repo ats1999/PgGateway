@@ -1,0 +1,10 @@
+# Single container: Postgres + pg-gateway binary + Rust integration tests (see scripts/run-integration-tests.sh).
+services:
+  integration:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.integration
+    environment:
+      PG_GATEWAY_INTEGRATION: "1"
+      PG_GATEWAY_TEST_PG_PORT: "5432"
+      PG_GATEWAY_TEST_LISTEN_PORT: "6432"

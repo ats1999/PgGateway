@@ -24,6 +24,7 @@
 //! }
 //! ```
 
+mod admin;
 mod config;
 mod connection;
 mod gateway;

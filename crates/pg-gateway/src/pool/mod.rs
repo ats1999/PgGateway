@@ -50,6 +50,18 @@ impl UserDatabasePool {
         &self.key
     }
 
+    pub fn pool_mode(&self) -> PoolMode {
+        self.pool_mode
+    }
+
+    pub fn upstream(&self) -> &str {
+        &self.upstream
+    }
+
+    pub async fn idle_count(&self) -> usize {
+        self.idle.lock().await.len()
+    }
+
     pub async fn try_acquire_idle(&self) -> Option<PooledServerConnection> {
         let mut idle_list = self.idle.lock().await;
 
@@ -271,6 +283,15 @@ impl PooledServerConnection {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct PoolSnapshot {
+    pub user: String,
+    pub database: String,
+    pub pool_mode: PoolMode,
+    pub upstream: String,
+    pub idle_count: usize,
+}
+
 /// Lazily creates one [`UserDatabasePool`] per [`PoolKey`].
 pub struct PoolManager {
     config: Arc<crate::config::GatewayConfig>,
@@ -325,5 +346,20 @@ impl PoolManager {
     ) -> anyhow::Result<PooledServerConnection> {
         let pool = self.pool_for(PoolKey::new(user, database)).await?;
         pool.acquire().await
+    }
+
+    pub async fn admin_pool_snapshots(&self) -> Vec<PoolSnapshot> {
+        let guard = self.pools.lock().await;
+        let mut out = Vec::with_capacity(guard.len());
+        for (key, pool) in guard.iter() {
+            out.push(PoolSnapshot {
+                user: key.user.clone(),
+                database: key.database.clone(),
+                pool_mode: pool.pool_mode(),
+                upstream: pool.upstream().to_string(),
+                idle_count: pool.idle_count().await,
+            });
+        }
+        out
     }
 }

@@ -1,6 +1,6 @@
-//! End-to-end: client → pg-gateway → mock upstream Postgres.
+//! In-process e2e: client → pg-gateway → mock upstream Postgres.
 
-#[path = "common/mod.rs"]
+#[path = "../common/mod.rs"]
 mod common;
 
 use std::time::Duration;

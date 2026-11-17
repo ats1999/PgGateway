@@ -7,6 +7,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::net::{tcp::OwnedReadHalf, tcp::OwnedWriteHalf, TcpListener, TcpStream};
 use tracing::{info, trace, warn};
 
+use crate::admin::{serve_admin_connection, AdminStore, ClientRegistry};
 use crate::config::{GatewayConfig, PoolMode};
 use crate::connection::{ClientConnection, ServerConnection, StartupIdentity};
 use crate::pool::{ConnectionState, PoolManager, PooledServerConnection};
@@ -17,6 +18,8 @@ use pg_protocol::{read_backend, write_backend, ProtocolError};
 pub struct Gateway {
     config: Arc<GatewayConfig>,
     pools: Arc<PoolManager>,
+    admin: Arc<AdminStore>,
+    clients: Arc<ClientRegistry>,
 }
 
 impl Gateway {
@@ -24,7 +27,14 @@ impl Gateway {
         config.validate()?;
         let config = Arc::new(config);
         let pools = PoolManager::new(Arc::clone(&config));
-        Ok(Arc::new(Self { config, pools }))
+        let admin = Arc::new(AdminStore::new()?);
+        let clients = ClientRegistry::new();
+        Ok(Arc::new(Self {
+            config,
+            pools,
+            admin,
+            clients,
+        }))
     }
 
     pub fn config(&self) -> &GatewayConfig {
@@ -33,6 +43,14 @@ impl Gateway {
 
     pub fn pools(&self) -> &Arc<PoolManager> {
         &self.pools
+    }
+
+    pub fn admin_store(&self) -> &AdminStore {
+        &self.admin
+    }
+
+    pub fn clients(&self) -> &ClientRegistry {
+        &self.clients
     }
 
     pub async fn run(self: &Arc<Self>) -> anyhow::Result<()> {
@@ -326,6 +344,26 @@ pub async fn serve_connection(
     let mut client = ClientConnection::new(stream, peer);
     let identity = client.complete_startup().await.context("client startup")?;
 
+    if gateway.config.is_admin_database(&identity.database) {
+        if !gateway.config.allows_admin_client(&identity.user) {
+            bail!(
+                "user `{}` is not allowed for admin database",
+                identity.user
+            );
+        }
+        let client_guard = gateway
+            .clients
+            .register(
+                peer,
+                identity.user.clone(),
+                identity.database.clone(),
+            )
+            .await;
+        let res =
+            serve_admin_connection(client, peer, gateway, identity, client_guard).await;
+        return res;
+    }
+
     if !gateway.config.allows_client(&identity.user, &identity.database) {
         bail!(
             "user `{}` is not allowed for database `{}`",
@@ -333,6 +371,15 @@ pub async fn serve_connection(
             identity.database
         );
     }
+
+    let client_guard = gateway
+        .clients
+        .register(
+            peer,
+            identity.user.clone(),
+            identity.database.clone(),
+        )
+        .await;
 
     let primary = gateway
         .config
@@ -404,7 +451,8 @@ pub async fn serve_connection(
                 }
             }
         }
-    }
+    };
 
+    client_guard.unregister().await;
     Ok(())
 }
