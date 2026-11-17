@@ -20,7 +20,8 @@ async fn admin_show_version() {
         .await
         .expect("SHOW VERSION");
     assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0][0].as_deref(), Some("pg-gateway"));
+    let expected = format!("PgGateway {}", env!("CARGO_PKG_VERSION"));
+    assert_eq!(rows[0][0].as_deref(), Some(expected.as_str()));
 }
 
 #[tokio::test]

@@ -160,6 +160,11 @@ fn is_read_only(sql: &str) -> bool {
     upper.starts_with("SELECT") || upper.starts_with("WITH") || upper.starts_with("PRAGMA")
 }
 
+/// Semver string for `SHOW VERSION` (matches `Cargo.toml` / `CARGO_PKG_VERSION`).
+pub fn admin_version_string() -> String {
+    format!("PgGateway {}", env!("CARGO_PKG_VERSION"))
+}
+
 /// PgBouncer-style `SHOW` → SQLite `SELECT` for psql users.
 pub fn normalize_admin_sql(sql: &str) -> String {
     let s = sql.trim().trim_end_matches(';').trim();
@@ -167,7 +172,10 @@ pub fn normalize_admin_sql(sql: &str) -> String {
         "SHOW POOLS" => "SELECT * FROM pools ORDER BY database, user".to_string(),
         "SHOW CLIENTS" => "SELECT * FROM clients ORDER BY client_id".to_string(),
         "SHOW DATABASES" => "SELECT * FROM databases ORDER BY name".to_string(),
-        "SHOW VERSION" => "SELECT 'pg-gateway' AS version".to_string(),
+        "SHOW VERSION" => {
+            let version = admin_version_string().replace('\'', "''");
+            format!("SELECT '{version}' AS version")
+        }
         _ => s.to_string(),
     }
 }
@@ -191,5 +199,12 @@ mod tests {
             normalize_admin_sql("SHOW POOLS;"),
             "SELECT * FROM pools ORDER BY database, user"
         );
+    }
+
+    #[test]
+    fn show_version_includes_semver() {
+        let sql = normalize_admin_sql("SHOW VERSION");
+        assert!(sql.contains(env!("CARGO_PKG_VERSION")));
+        assert!(sql.contains("PgGateway"));
     }
 }
