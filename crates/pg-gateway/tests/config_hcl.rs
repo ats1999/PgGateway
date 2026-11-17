@@ -8,8 +8,8 @@ databases = {
   postgres = {
     primary = { host = "db-primary", port = 5432 }
     replicas = [{ host = "db-replica", port = 5432 }]
-    pool = { max_connections = 40 }
-    userlist = [{ name = "app", database = "postgres", password = "secret" }]
+    pool_config = { max_connections = 40 }
+    userlist = [{ name = "app", password = "secret" }]
   }
 }
 "#;
@@ -18,7 +18,7 @@ databases = {
     assert_eq!(config.databases["postgres"].primary.host, "db-primary");
     assert_eq!(config.databases["postgres"].replicas.len(), 1);
     assert_eq!(
-        config.databases["postgres"].pool.max_connections,
+        config.databases["postgres"].pool_config.max_connections,
         Some(40)
     );
     assert_eq!(config.databases["postgres"].userlist.len(), 1);
@@ -46,9 +46,11 @@ fn rejects_unknown_database_lookup() {
 fn user_allowlist() {
     let hcl_config = r#"
 databases = {
-  postgres = { primary = { host = "h", port = 5432 } }
+  postgres = {
+    primary = { host = "h", port = 5432 }
+    userlist = [{ name = "alice" }]
+  }
 }
-userlist = [{ name = "alice", database = "postgres" }]
 "#;
     let config = GatewayConfig::from_hcl_str(hcl_config).unwrap();
     assert!(config.allows_client("alice", "postgres"));

@@ -82,7 +82,8 @@ impl UserDatabasePool {
 
     fn should_pin_connection(&self, state: ConnectionState) -> bool {
         match self.pool_mode {
-            PoolMode::Session => true,
+            // Session: dedicated upstream while a client is connected; idle queue entries are reusable.
+            PoolMode::Session => state == ConnectionState::InTransaction,
             PoolMode::Statement => false,
             PoolMode::Transaction => state == ConnectionState::InTransaction,
         }
@@ -195,7 +196,7 @@ impl PoolReturnTarget {
 
     fn should_pin(&self, state: ConnectionState) -> bool {
         match self.pool_mode {
-            PoolMode::Session => true,
+            PoolMode::Session => state == ConnectionState::InTransaction,
             PoolMode::Statement => false,
             PoolMode::Transaction => state == ConnectionState::InTransaction,
         }

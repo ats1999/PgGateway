@@ -11,7 +11,7 @@ const DEFAULT_PG_PORT: u16 = 5432;
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum PoolMode {
-    /// Pin for entire session (never release to pool)
+    /// One upstream connection per client session; return to pool after disconnect (DISCARD ALL).
     #[default]
     Session,
     /// Pin until statement completes
@@ -137,7 +137,7 @@ impl GatewayConfig {
         };
 
         if cluster.userlist.is_empty() {
-            return false;
+            return true;
         }
 
         cluster.userlist

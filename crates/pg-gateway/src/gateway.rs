@@ -86,10 +86,11 @@ async fn relay_with_transaction_tracking(
             client_result = async {
                 match read_frontend(&mut client_read).await {
                     Ok(msg) => {
-                        write_frontend(&mut server_write, &msg).await?;
                         if msg.tag() == b'X' {
-                            Ok::<_, anyhow::Error>(Some(()))  // Terminate
+                            // Do not forward client Terminate — upstream stays open for the pool.
+                            Ok::<_, anyhow::Error>(Some(()))
                         } else {
+                            write_frontend(&mut server_write, &msg).await?;
                             Ok(None)
                         }
                     }
@@ -98,7 +99,7 @@ async fn relay_with_transaction_tracking(
                 }
             } => {
                 if client_result?.is_some() {
-                    let _ = server_write.shutdown().await;
+                    // Keep upstream socket open so release() can DISCARD ALL and return to pool.
                     break;
                 }
             }

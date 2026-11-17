@@ -10,7 +10,7 @@ pub fn config_with_primary(listen: &str, database: &str, upstream: &str) -> Gate
         DatabaseCluster {
             primary: HostPort { host, port },
             replicas: Vec::new(),
-            pool: Default::default(),
+            pool_config: Default::default(),
             userlist: Vec::new(),
         },
     );

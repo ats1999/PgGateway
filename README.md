@@ -47,7 +47,7 @@ databases = {
 
     # Pool configuration with explicit pooling mode
     # pool_mode options: "session" (default), "transaction", "statement"
-    #   - session: Pin for entire session (never release to pool)
+    #   - session: One upstream conn per client session; reusable after disconnect
     #   - transaction: Pin until COMMIT/ROLLBACK
     #   - statement: Unpin after each statement completes
     pool_config = {
@@ -71,7 +71,7 @@ PG_GATEWAY_CONFIG=pg-gateway.example.hcl cargo run -p pg-gateway
 
 **Connection Pooling Modes:**
 
-- **`session`** (default) — Connection pinned to client for entire session. Safest option, minimal connection reuse.
+- **`session`** (default) — Upstream connection stays with one client for the whole session; after disconnect it is reset and returned to the pool for the next client.
 - **`transaction`** — Connection pinned during transactions (BEGIN...COMMIT/ROLLBACK). Released after transaction ends. Best for OLTP workloads.
 - **`statement`** — Connection released after each statement. Maximum reuse but requires stateless workloads (no session variables, prepared statements).
 
