@@ -27,7 +27,6 @@ These are rewritten to `SELECT` on the admin catalog. Trailing `;` is optional; 
 
 ### `SHOW VERSION`
 
-Gateway build identity (fixed string today).
 
 ```bash
 psql -h 127.0.0.1 -p 6432 -U postgres -d pg_gateway -c "SHOW VERSION;"
@@ -35,9 +34,8 @@ psql -h 127.0.0.1 -p 6432 -U postgres -d pg_gateway -c "SHOW VERSION;"
 
 | Column | Description |
 |--------|-------------|
-| `version` | Always `pg-gateway`. |
+| `version` | `PgGateway <semver>`|
 
-Equivalent SQL: `SELECT 'pg-gateway' AS version`.
 
 ---
 
