@@ -93,15 +93,13 @@ Environment:
 
 ### Admin console (SQLite-backed)
 
-Connect to the virtual database `pgbouncer` (name configurable via `admin_database` in HCL).  
-Queries run against an in-memory SQLite snapshot of pool state; answers use the normal Postgres wire format.
+Connect to the virtual database **`pg_gateway`** (override with `admin_database` in HCL).
 
 ```bash
-psql -h 127.0.0.1 -p 6432 -U postgres -d pgbouncer -c "SHOW POOLS;"
-psql -h 127.0.0.1 -p 6432 -U postgres -d pgbouncer -c "SELECT * FROM clients;"
+psql -h 127.0.0.1 -p 6432 -U postgres -d pg_gateway -c "SHOW POOLS;"
 ```
 
-Supported: `SHOW POOLS`, `SHOW CLIENTS`, `SHOW DATABASES`, `SHOW VERSION`, and read-only `SELECT` / `WITH` SQL.
+Full command reference, columns, and rules: **[docs/admin-console.md](docs/admin-console.md)**.
 
 Connect with `psql` through the gateway:
 
