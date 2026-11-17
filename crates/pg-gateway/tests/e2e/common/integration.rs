@@ -92,7 +92,7 @@ impl IntegrationTarget {
 
     pub fn admin_dsn(&self) -> String {
         format!(
-            "host={} port={} user=postgres password=postgres dbname=pgbouncer",
+            "host={} port={} user=postgres password=postgres dbname=pg_gateway",
             gateway_host(),
             self.gateway_port
         )

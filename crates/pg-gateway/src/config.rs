@@ -164,7 +164,7 @@ fn default_listen() -> String {
 }
 
 fn default_admin_database() -> String {
-    "pgbouncer".to_string()
+    "pg_gateway".to_string()
 }
 
 fn default_port() -> u16 {

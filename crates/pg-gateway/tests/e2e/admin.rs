@@ -1,4 +1,4 @@
-//! DB e2e: admin virtual DB (`pgbouncer`) against a live gateway process.
+//! DB e2e: admin virtual DB (`pg_gateway`) against a live gateway process.
 
 #[path = "common/integration.rs"]
 mod integration;
