@@ -6,7 +6,7 @@ use std::sync::Arc;
 use bytes::Bytes;
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
-use tracing::{debug, warn};
+use tracing::{trace, warn};
 
 pub use key::PoolKey;
 
@@ -54,8 +54,22 @@ impl UserDatabasePool {
         let mut idle_list = self.idle.lock().await;
 
         // Find an unpinned connection
+        trace!(
+            user = %self.key.user,
+            database = %self.key.database,
+            pool_mode = ?self.pool_mode,
+            idle_queue_len = idle_list.len(),
+            "pool: scanning idle queue"
+        );
         for i in (0..idle_list.len()).rev() {
             let should_pin = self.should_pin_connection(idle_list[i].state);
+            trace!(
+                user = %self.key.user,
+                index = i,
+                conn_state = ?idle_list[i].state,
+                should_pin,
+                "pool: idle entry"
+            );
             if !should_pin {
                 let entry = idle_list.remove(i);
                 let return_target = Arc::new(PoolReturnTarget {
@@ -63,11 +77,13 @@ impl UserDatabasePool {
                     idle: Arc::clone(&self.idle),
                     pool_mode: self.pool_mode,
                 });
-                debug!(
+                trace!(
+                    event = "pool_acquire_reuse",
                     user = %self.key.user,
                     database = %self.key.database,
+                    pool_mode = ?self.pool_mode,
                     idle_connections_remaining = idle_list.len(),
-                    "connection unpinned (acquired from pool)"
+                    "reused idle upstream connection"
                 );
                 return Some(PooledServerConnection {
                     stream: Some(entry.stream),
@@ -112,10 +128,13 @@ impl UserDatabasePool {
             return Ok(conn);
         }
 
-        debug!(
+        trace!(
+            event = "pool_acquire_new",
             user = %self.key.user,
             database = %self.key.database,
-            "pool: opening new upstream connection"
+            pool_mode = ?self.pool_mode,
+            upstream = %self.upstream,
+            "opening new upstream connection"
         );
         let (server, auth_flight) = ServerConnection::connect_and_authenticate(
             &self.upstream,
@@ -152,6 +171,15 @@ impl PoolReturnTarget {
     ) {
         // Determine whether to pin the connection based on pool mode and state
         let should_pin = self.should_pin(state);
+        trace!(
+            event = "pool_release_start",
+            user = %self.key.user,
+            database = %self.key.database,
+            pool_mode = ?self.pool_mode,
+            conn_state = ?state,
+            should_pin,
+            "releasing upstream to pool"
+        );
 
         let mut server = ServerConnection::from_tcp(stream);
 
@@ -164,25 +192,36 @@ impl PoolReturnTarget {
 
         match prepare_result {
             Ok(()) => {
+                let idle_after = {
+                    let mut idle_list = self.idle.lock().await;
+                    idle_list.push(IdleEntry {
+                        stream: server.into_tcp(),
+                        auth_flight,
+                        state: if should_pin { state } else { ConnectionState::Idle },
+                    });
+                    idle_list.len()
+                };
                 if should_pin {
-                    debug!(
+                    trace!(
+                        event = "pool_release_pinned",
                         user = %self.key.user,
                         database = %self.key.database,
-                        state = ?state,
-                        "connection pinned (not released to pool)"
+                        conn_state = ?state,
+                        idle_queue_len = idle_after,
+                        reusable = false,
+                        "upstream pinned in idle queue"
                     );
                 } else {
-                    debug!(
+                    trace!(
+                        event = "pool_release_reusable",
                         user = %self.key.user,
                         database = %self.key.database,
-                        "connection unpinned (released to pool)"
+                        conn_state = ?state,
+                        idle_queue_len = idle_after,
+                        reusable = true,
+                        "upstream ready for reuse in idle queue"
                     );
                 }
-                self.idle.lock().await.push(IdleEntry {
-                    stream: server.into_tcp(),
-                    auth_flight,
-                    state: if should_pin { state } else { ConnectionState::Idle },
-                });
             }
             Err(error) => {
                 warn!(

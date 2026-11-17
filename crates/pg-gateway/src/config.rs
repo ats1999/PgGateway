@@ -14,9 +14,9 @@ pub enum PoolMode {
     /// One upstream connection per client session; return to pool after disconnect (DISCARD ALL).
     #[default]
     Session,
-    /// Pin until statement completes
+    /// Return upstream to the pool after each query (`ReadyForQuery` idle).
     Statement,
-    /// Pin until transaction ends (COMMIT/ROLLBACK)
+    /// Return upstream when the transaction ends (`ReadyForQuery` idle after `COMMIT`/`ROLLBACK` or autocommit).
     Transaction,
 }
 

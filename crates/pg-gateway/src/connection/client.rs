@@ -60,10 +60,7 @@ impl ClientConnection {
 
     /// Replays cached backend auth bytes (pooled upstream path).
     pub async fn replay_auth_flight(&mut self, auth_flight: &Bytes) -> anyhow::Result<()> {
-        self.stream
-            .write_all(auth_flight)
-            .await
-            .context("replay auth to client")
+        replay_auth_flight_to_writer(&mut self.stream, auth_flight).await
     }
 
     /// Forwards authentication with the real client (password/SCRAM) and records backend bytes for replay.
@@ -97,6 +94,23 @@ impl ClientConnection {
         tokio::net::tcp::OwnedWriteHalf,
     ) {
         self.stream.into_split()
+    }
+
+    /// Replay stored auth bytes on the split client path (pooled upstream, client not authenticated yet).
+    pub async fn replay_auth_flight_to_client_write(
+        client_write: &mut tokio::net::tcp::OwnedWriteHalf,
+        auth_flight: &Bytes,
+    ) -> anyhow::Result<()> {
+        replay_auth_flight_to_writer(client_write, auth_flight).await
+    }
+
+    /// Same as `authenticate_upstream` when the client stream is already split for the relay loop.
+    pub async fn authenticate_upstream_halves(
+        client_read: &mut tokio::net::tcp::OwnedReadHalf,
+        client_write: &mut tokio::net::tcp::OwnedWriteHalf,
+        upstream: &mut TcpStream,
+    ) -> anyhow::Result<Bytes> {
+        authenticate_upstream_io(client_read, client_write, upstream).await
     }
 
     /// Bidirectional relay after startup/auth; returns the upstream socket for pool release.
@@ -134,6 +148,41 @@ impl ClientConnection {
             .reunite(server_write)
             .map_err(|_| anyhow::anyhow!("reunite upstream after relay"))
     }
+}
+
+/// Cached bytes from a previous upstream login (R/S/Z…); psql thinks it talked to Postgres.
+async fn replay_auth_flight_to_writer(
+    writer: &mut (impl AsyncWriteExt + Unpin),
+    auth_flight: &Bytes,
+) -> anyhow::Result<()> {
+    writer
+        .write_all(auth_flight)
+        .await
+        .context("replay auth to client")
+}
+
+/// Shuttle auth between client and upstream; stash the server→client bytes for pool replay.
+async fn authenticate_upstream_io(
+    client_read: &mut (impl tokio::io::AsyncRead + Unpin),
+    client_write: &mut (impl AsyncWriteExt + Unpin),
+    upstream: &mut TcpStream,
+) -> anyhow::Result<Bytes> {
+    let mut auth_flight = Vec::new();
+    loop {
+        let msg = read_backend(upstream).await?;
+        auth_flight.extend_from_slice(&msg.raw);
+        write_backend(client_write, &msg).await?;
+        match msg.tag() {
+            b'Z' => break,
+            b'E' => anyhow::bail!("upstream rejected authentication"),
+            b'R' if auth_request_needs_password(&msg.raw) => {
+                let client_msg = read_frontend(client_read).await?;
+                write_frontend(upstream, &client_msg).await?;
+            }
+            _ => {}
+        }
+    }
+    Ok(Bytes::from(auth_flight))
 }
 
 fn auth_request_needs_password(raw: &[u8]) -> bool {
