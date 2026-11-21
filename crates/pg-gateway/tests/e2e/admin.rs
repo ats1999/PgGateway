@@ -60,11 +60,16 @@ async fn admin_show_pools_after_proxy_traffic() {
     let rows = admin_query_rows(&target.admin_dsn(), "SHOW POOLS")
         .await
         .expect("SHOW POOLS");
-    assert_eq!(rows.len(), 1, "expected one pool row: {rows:?}");
-    assert_eq!(rows[0][0].as_deref(), Some("pg-gateway"));
-    assert_eq!(rows[0][1].as_deref(), Some("postgres"));
-    assert_eq!(rows[0][2].as_deref(), Some("transaction"));
-    let idle_count: i64 = rows[0][4]
+    // Other databases may have pools too (gw-logical is pre-warmed by min_pool_size).
+    let pg_gateway: Vec<_> = rows
+        .iter()
+        .filter(|row| row[0].as_deref() == Some("pg-gateway"))
+        .collect();
+    assert_eq!(pg_gateway.len(), 1, "expected one pg-gateway pool row: {rows:?}");
+    let row = pg_gateway[0];
+    assert_eq!(row[1].as_deref(), Some("postgres"));
+    assert_eq!(row[2].as_deref(), Some("transaction"));
+    let idle_count: i64 = row[4]
         .as_deref()
         .unwrap_or("0")
         .parse()

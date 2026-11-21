@@ -11,10 +11,19 @@ TEMPLATE="${PG_GATEWAY_CONFIG_TEMPLATE:-/app/docker/integration-gateway.hcl.tpl}
 BIN="${PG_GATEWAY_BIN:-pg-gateway}"
 
 pkill -x "$(basename "$BIN")" 2>/dev/null || true
-sleep 0.2
+for _ in $(seq 1 50); do
+  pgrep -x "$(basename "$BIN")" >/dev/null 2>&1 || break
+  sleep 0.1
+done
 
-export LISTEN_PORT PG_PORT POOL_MODE
-envsubst '${LISTEN_PORT} ${PG_PORT} ${POOL_MODE}' <"$TEMPLATE" >"$HCL_PATH"
+# Optional extra pool settings (newline-separated `key = value`), injected by tests.
+DEFAULTS_POOL_CONFIG="${DEFAULTS_POOL_CONFIG:-}"
+DB_POOL_CONFIG="${DB_POOL_CONFIG:-}"
+USER_POOL_CONFIG="${USER_POOL_CONFIG:-}"
+
+export LISTEN_PORT PG_PORT POOL_MODE DEFAULTS_POOL_CONFIG DB_POOL_CONFIG USER_POOL_CONFIG
+envsubst '${LISTEN_PORT} ${PG_PORT} ${POOL_MODE} ${DEFAULTS_POOL_CONFIG} ${DB_POOL_CONFIG} ${USER_POOL_CONFIG}' \
+  <"$TEMPLATE" >"$HCL_PATH"
 
 PG_GATEWAY_CONFIG="$HCL_PATH" "$BIN" &
 echo $! >/tmp/pg-gateway.pid

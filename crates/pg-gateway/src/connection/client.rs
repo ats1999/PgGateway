@@ -3,19 +3,15 @@ use std::net::SocketAddr;
 use anyhow::Context;
 use bytes::Bytes;
 use pg_protocol::{
-    read_backend, read_frontend, read_startup_request, relay_session, write_backend,
-    write_frontend, write_gssenc_response, write_ssl_response, ProtocolError, RelayOutcome,
-    StartupRequest,
+    read_frontend, read_startup_request, relay_session, write_gssenc_response, write_ssl_response,
+    ProtocolError, RelayOutcome, StartupRequest,
 };
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
 
 use crate::startup_parse::parse_startup_params;
 
-const AUTH_CLEARTEXT_PASSWORD: i32 = 3;
 const AUTH_MD5_PASSWORD: i32 = 5;
-const AUTH_SASL: i32 = 10;
-const AUTH_SASL_CONTINUE: i32 = 11;
 
 /// Client-facing side of a gateway session (Postgres client → gateway).
 pub struct ClientConnection {
@@ -62,32 +58,30 @@ impl ClientConnection {
         })
     }
 
+    /// Gateway-side password check against the userlist `password` (PgBouncer-style): md5
+    /// challenge with a random salt. `Ok(false)` = wrong or missing password; the caller sends
+    /// the FATAL. Nothing is sent on success: the client's AuthenticationOk comes from the
+    /// upstream login flight.
+    pub async fn verify_password(&mut self, user: &str, password: &str) -> anyhow::Result<bool> {
+        let salt: [u8; 4] = rand::random();
+        let mut body = AUTH_MD5_PASSWORD.to_be_bytes().to_vec();
+        body.extend_from_slice(&salt);
+        let mut request = vec![b'R'];
+        request.extend_from_slice(&((4 + body.len()) as i32).to_be_bytes());
+        request.extend_from_slice(&body);
+        self.stream
+            .write_all(&request)
+            .await
+            .context("send password request")?;
+        let reply = read_frontend(&mut self.stream)
+            .await
+            .context("read client password")?;
+        Ok(reply.tag() == b'p' && md5_reply_matches(user, password, salt, &reply.raw))
+    }
+
     /// Replays cached backend auth bytes (pooled upstream path).
     pub async fn replay_auth_flight(&mut self, auth_flight: &Bytes) -> anyhow::Result<()> {
         replay_auth_flight_to_writer(&mut self.stream, auth_flight).await
-    }
-
-    /// Forwards authentication with the real client (password/SCRAM) and records backend bytes for replay.
-    pub async fn authenticate_upstream(
-        &mut self,
-        upstream: &mut TcpStream,
-    ) -> anyhow::Result<Bytes> {
-        let mut auth_flight = Vec::new();
-        loop {
-            let msg = read_backend(upstream).await?;
-            auth_flight.extend_from_slice(&msg.raw);
-            write_backend(&mut self.stream, &msg).await?;
-            match msg.tag() {
-                b'Z' => break,
-                b'E' => anyhow::bail!("upstream rejected authentication"),
-                b'R' if auth_request_needs_password(&msg.raw) => {
-                    let client_msg = read_frontend(&mut self.stream).await?;
-                    write_frontend(upstream, &client_msg).await?;
-                }
-                _ => {}
-            }
-        }
-        Ok(Bytes::from(auth_flight))
     }
 
     /// Consume this client connection and split into read/write halves
@@ -106,15 +100,6 @@ impl ClientConnection {
         auth_flight: &Bytes,
     ) -> anyhow::Result<()> {
         replay_auth_flight_to_writer(client_write, auth_flight).await
-    }
-
-    /// Same as `authenticate_upstream` when the client stream is already split for the relay loop.
-    pub async fn authenticate_upstream_halves(
-        client_read: &mut tokio::net::tcp::OwnedReadHalf,
-        client_write: &mut tokio::net::tcp::OwnedWriteHalf,
-        upstream: &mut TcpStream,
-    ) -> anyhow::Result<Bytes> {
-        authenticate_upstream_io(client_read, client_write, upstream).await
     }
 
     /// Bidirectional relay after startup/auth; returns the upstream socket for pool release.
@@ -165,39 +150,19 @@ async fn replay_auth_flight_to_writer(
         .context("replay auth to client")
 }
 
-/// Shuttle auth between client and upstream; stash the server→client bytes for pool replay.
-async fn authenticate_upstream_io(
-    client_read: &mut (impl tokio::io::AsyncRead + Unpin),
-    client_write: &mut (impl AsyncWriteExt + Unpin),
-    upstream: &mut TcpStream,
-) -> anyhow::Result<Bytes> {
-    let mut auth_flight = Vec::new();
-    loop {
-        let msg = read_backend(upstream).await?;
-        auth_flight.extend_from_slice(&msg.raw);
-        write_backend(client_write, &msg).await?;
-        match msg.tag() {
-            b'Z' => break,
-            b'E' => anyhow::bail!("upstream rejected authentication"),
-            b'R' if auth_request_needs_password(&msg.raw) => {
-                let client_msg = read_frontend(client_read).await?;
-                write_frontend(upstream, &client_msg).await?;
-            }
-            _ => {}
-        }
-    }
-    Ok(Bytes::from(auth_flight))
-}
-
-fn auth_request_needs_password(raw: &[u8]) -> bool {
-    if raw.first() != Some(&b'R') || raw.len() < 9 {
+/// Does a PasswordMessage (`raw`, full frame) carry the md5 hash of `password` for `salt`?
+/// Compared in constant time.
+fn md5_reply_matches(user: &str, password: &str, salt: [u8; 4], raw: &[u8]) -> bool {
+    let Some(sent) = raw.get(5..).and_then(|body| body.strip_suffix(&[0])) else {
         return false;
-    }
-    let auth_type = i32::from_be_bytes([raw[5], raw[6], raw[7], raw[8]]);
-    matches!(
-        auth_type,
-        AUTH_CLEARTEXT_PASSWORD | AUTH_MD5_PASSWORD | AUTH_SASL | AUTH_SASL_CONTINUE
-    )
+    };
+    let expected = postgres_protocol::authentication::md5_hash(user.as_bytes(), password.as_bytes(), salt);
+    sent.len() == expected.len()
+        && sent
+            .iter()
+            .zip(expected.as_bytes())
+            .fold(0u8, |acc, (a, b)| acc | (a ^ b))
+            == 0
 }
 
 async fn read_startup_loop(client: &mut TcpStream) -> anyhow::Result<Vec<u8>> {
@@ -216,5 +181,32 @@ async fn read_startup_loop(client: &mut TcpStream) -> anyhow::Result<Vec<u8>> {
                 anyhow::bail!("cancel request on main listener is not supported yet");
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn password_frame(sent: &[u8]) -> Vec<u8> {
+        let mut raw = vec![b'p'];
+        raw.extend_from_slice(&((4 + sent.len() + 1) as i32).to_be_bytes());
+        raw.extend_from_slice(sent);
+        raw.push(0);
+        raw
+    }
+
+    #[test]
+    fn md5_reply_must_match_user_password_and_salt() {
+        let salt = [9, 8, 7, 6];
+        let good = postgres_protocol::authentication::md5_hash(b"svc", b"s3cret", salt);
+        assert!(md5_reply_matches("svc", "s3cret", salt, &password_frame(good.as_bytes())));
+        assert!(!md5_reply_matches("svc", "wrong", salt, &password_frame(good.as_bytes())));
+        assert!(!md5_reply_matches("other", "s3cret", salt, &password_frame(good.as_bytes())));
+        assert!(!md5_reply_matches("svc", "s3cret", [0, 0, 0, 0], &password_frame(good.as_bytes())));
+        // A cleartext password is not accepted in place of the hash.
+        assert!(!md5_reply_matches("svc", "s3cret", salt, &password_frame(b"s3cret")));
+        assert!(!md5_reply_matches("svc", "s3cret", salt, &password_frame(b"")));
+        assert!(!md5_reply_matches("svc", "s3cret", salt, b"p\0\0"));
     }
 }

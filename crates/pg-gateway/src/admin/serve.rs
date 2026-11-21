@@ -33,7 +33,7 @@ pub async fn serve_admin_connection(
             Err(e) => return Err(e.into()),
         }
     }
-    client_guard.unregister().await;
+    drop(client_guard);
     Ok(())
 }
 

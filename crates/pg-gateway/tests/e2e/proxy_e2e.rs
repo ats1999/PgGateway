@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use pg_gateway::Gateway;
 use pg_protocol::{read_backend, read_frontend, read_startup_request, StartupRequest};
-use common::config_with_primary;
+use common::{answer_password, config_with_primary, TEST_PASSWORD};
 use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::time::timeout;
@@ -55,7 +55,8 @@ async fn proxy_forwards_startup_and_simple_query() {
     let gateway_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let gateway_addr = gateway_listener.local_addr().unwrap();
 
-    let config = config_with_primary(&gateway_addr.to_string(), "postgres", &mock_addr.to_string());
+    let config =
+        config_with_primary(&gateway_addr.to_string(), "postgres", &mock_addr.to_string(), "test");
     let gateway = Gateway::new(config).unwrap();
 
     let gateway_task = tokio::spawn(async move {
@@ -69,6 +70,7 @@ async fn proxy_forwards_startup_and_simple_query() {
     params.extend_from_slice(b"user\0test\0database\0postgres\0\0");
     let startup = startup_packet(3 << 16, &params);
     client.write_all(&startup).await.unwrap();
+    answer_password(&mut client, "test", TEST_PASSWORD).await;
 
     let auth = read_backend(&mut client).await.unwrap();
     assert_eq!(auth.tag(), b'R');

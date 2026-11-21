@@ -1,30 +1,28 @@
-use std::hash::{Hash, Hasher};
+use crate::config::UpstreamTarget;
 
-/// Pool identity: one mutex-protected idle list per `(user, database)`.
-#[derive(Debug, Clone, Eq)]
+/// Pool identity: one idle list per `(user, database, upstream instance)`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct PoolKey {
     pub user: String,
     pub database: String,
-}
-
-impl PartialEq for PoolKey {
-    fn eq(&self, other: &Self) -> bool {
-        self.user == other.user && self.database == other.database
-    }
-}
-
-impl Hash for PoolKey {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.user.hash(state);
-        self.database.hash(state);
-    }
+    pub target: UpstreamTarget,
 }
 
 impl PoolKey {
+    /// Pool on the primary (the only instance clients are routed to today).
     pub fn new(user: impl Into<String>, database: impl Into<String>) -> Self {
+        Self::for_target(user, database, UpstreamTarget::Primary)
+    }
+
+    pub fn for_target(
+        user: impl Into<String>,
+        database: impl Into<String>,
+        target: UpstreamTarget,
+    ) -> Self {
         Self {
             user: user.into(),
             database: database.into(),
+            target,
         }
     }
 }

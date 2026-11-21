@@ -25,11 +25,23 @@ path = "tests/e2e/proxy_e2e.rs"
 name = "pool_e2e"
 path = "tests/e2e/pool_e2e.rs"
 
+[[test]]
+name = "integration_pool_config"
+path = "tests/e2e/pool_config_e2e.rs"
+
+[[test]]
+name = "integration_dbname_auth"
+path = "tests/e2e/dbname_auth_e2e.rs"
+
 [dependencies]
 anyhow = "1"
 bytes = "1"
 hcl-rs = "0.18"
 pg-protocol = { path = "../pg-protocol" }
+# md5 / SCRAM-SHA-256 client auth for gateway-initiated upstream logins.
+postgres-protocol = "0.6"
+# Random md5 salt for gateway-side client password checks.
+rand = "0.10"
 serde = { version = "1", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"

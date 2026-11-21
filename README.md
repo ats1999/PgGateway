@@ -31,39 +31,36 @@ cargo run -p pg-gateway
 
 Set `PG_GATEWAY_CONFIG` to an HCL file, or rely on defaults (listen `127.0.0.1:6432`, database `postgres` → `127.0.0.1:5432`).
 
-Example (`pg-gateway.example.hcl`):
+Example (`pg-gateway.example.hcl`); full field reference: **[docs/configuration.md](docs/configuration.md)**.
 
 ```hcl
 listen = "127.0.0.1:6432"
 
+pool_defaults = {
+  pool_size          = 100
+  server_reset_query = "DISCARD ALL"
+}
+
 databases = {
   postgres = {
-    primary = {
-      host = "127.0.0.1"
-      port = 5432
-    }
-
+    primary = { host = "127.0.0.1", port = 5432 }
     replicas = [{ host = "127.0.0.1", port = 5433 }]
 
-    # Pool configuration with explicit pooling mode
-    # pool_mode options: "session" (default), "transaction", "statement"
-    #   - session: One upstream conn per client session; reusable after disconnect
-    #   - transaction: Pin until COMMIT/ROLLBACK
-    #   - statement: Unpin after each statement completes
     pool_config = {
-      max_connections = 50
-      pool_mode = "session"
+      pool_mode  = "session"   # session | transaction | statement
+      pool_size  = 50          # max_connections is an accepted alias
+      min_pool_size = 2
+      max_db_connections = 200
     }
 
-    userlist = [{
-      name     = "postgres"
-      password = "postgres"
-    }]
+    userlist = [{ name = "postgres", password = "postgres" }]
   }
 }
 ```
 
-Client startup **`database`** must match a key under `databases`. Pooling uses each database’s **primary** today; **replicas** are configured but not routed yet. If **`userlist`** is non-empty, only listed `(name, database)` pairs may connect; an empty list allows any user (dev default).
+**Merge order** for pool settings: `pool_defaults` → database `pool_config` → `primary.pool_config` or `replicas[i].pool_config` → `userlist[].pool_config`. `SHOW POOL_CONFIG` on the admin database shows the winning value and layer for every setting. All settings: [docs/configuration.md](docs/configuration.md).
+
+Client startup **`database`** must match a key under `databases`. Pooling uses each database’s **primary** today; **replicas** are configured but not routed yet. If **`userlist`** is non-empty, only listed users may connect; an empty list allows any user (dev default).
 
 ```bash
 PG_GATEWAY_CONFIG=pg-gateway.example.hcl cargo run -p pg-gateway
@@ -89,7 +86,7 @@ gateway.run().await?;
 
 Environment:
 
-- `PG_GATEWAY_CONFIG` — path to YAML config (optional)
+- `PG_GATEWAY_CONFIG` — path to HCL config (optional)
 
 ### Admin console (SQLite-backed)
 
@@ -99,7 +96,9 @@ Connect to the virtual database **`pg_gateway`** (override with `admin_database`
 psql -h 127.0.0.1 -p 6432 -U postgres -d pg_gateway -c "SHOW POOLS;"
 ```
 
-Full command reference, columns, and rules: **[docs/admin-console.md](docs/admin-console.md)**.
+Configuration reference: **[docs/configuration.md](docs/configuration.md)**.  
+Admin console: **[docs/admin-console.md](docs/admin-console.md)**.  
+PgBouncer vs PgGateway admin: **[docs/pgbouncer-admin-comparison.md](docs/pgbouncer-admin-comparison.md)**.
 
 Connect with `psql` through the gateway:
 

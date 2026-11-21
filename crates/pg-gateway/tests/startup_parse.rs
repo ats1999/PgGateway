@@ -15,3 +15,4 @@ fn build_startup_has_protocol_version() {
     let version = i32::from_be_bytes([raw[4], raw[5], raw[6], raw[7]]);
     assert_eq!(version, 3 << 16);
 }
+

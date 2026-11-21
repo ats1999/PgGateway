@@ -529,6 +529,8 @@ dependencies = [
  "bytes",
  "hcl-rs",
  "pg-protocol",
+ "postgres-protocol",
+ "rand",
  "rusqlite",
  "serde",
  "tokio",

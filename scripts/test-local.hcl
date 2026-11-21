@@ -7,7 +7,7 @@ databases = {
     replicas = [{ host = "127.0.0.1", port = 5433 }]
 
     pool_config = {
-      max_connections = 50
+      pool_size = 50
       pool_mode = "transaction"
     }
 
