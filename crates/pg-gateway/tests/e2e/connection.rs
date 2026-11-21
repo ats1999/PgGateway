@@ -1,27 +1,33 @@
-use super::setup;
-
 use anyhow::Result;
-use tokio_postgres::NoTls;
 
 #[tokio::test]
-async fn postgres_is_available() -> Result<()> {
-    let postgres = setup::postgres::TestPostgres::start().await?;
+async fn gateway_connects_to_postgres() -> Result<()> {
+    let postgres = super::setup::postgres::TestPostgres::start().await?;
 
-    let (client, connection) = tokio_postgres::connect(
-        &postgres.connection_string(),
-        NoTls,
-    ).await?;
+    let gateway = super::setup::gateway::TestGateway::start_single_primary(&postgres).await?;
 
-    let connection_task = tokio::spawn(connection);
+    super::setup::runner::run(
+        "gateway_connects_to_postgres",
+        postgres,
+        gateway,
+        |context| async move {
+            let (client, connection) = tokio_postgres::connect(
+                &context.gateway.connection_string(),
+                tokio_postgres::NoTls,
+            )
+            .await?;
 
-    let row = client.query_one("SELECT 1", &[]).await?;
+            let connection_task = tokio::spawn(connection);
 
-    let value: i32 = row.get(0);
+            let row = client.query_one("SELECT 1", &[]).await?;
+            let value: i32 = row.get(0);
 
-    assert_eq!(value, 1);
+            assert_eq!(value, 1);
 
-    drop(client);
-    connection_task.await??;
+            connection_task.abort();
 
-    Ok(())
+            Ok(())
+        },
+    )
+    .await
 }

@@ -16,3 +16,4 @@ target
 todo.md
 test-logs/concurrent-20261117-104756.log
 test-logs/verify-20261117-103936.log
+crates/pg-gateway/test-logs/gateway_connects_to_postgres/*

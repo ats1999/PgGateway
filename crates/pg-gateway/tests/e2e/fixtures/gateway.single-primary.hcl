@@ -1,4 +1,4 @@
-listen = "127.0.0.1:6432"
+listen = "0.0.0.0:6432"
 
 pool_defaults = {
   pool_size = 10

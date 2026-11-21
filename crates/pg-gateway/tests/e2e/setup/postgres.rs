@@ -1,10 +1,6 @@
-
 use testcontainers_modules::{
     postgres::Postgres,
-    testcontainers::{
-        ContainerAsync,
-        runners::AsyncRunner,
-    },
+    testcontainers::{runners::AsyncRunner, ContainerAsync},
 };
 
 pub struct TestPostgres {
@@ -32,7 +28,7 @@ impl TestPostgres {
         let port = container.get_host_port_ipv4(5432).await?;
 
         Ok(Self {
-            _container:container,
+            _container: container,
             host: "127.0.0.1".to_string(),
             port,
             username,
@@ -44,11 +40,17 @@ impl TestPostgres {
     pub fn connection_string(&self) -> String {
         format!(
             "host={} port={} user={} password={} dbname={}",
-            self.host,
-            self.port,
-            self.username,
-            self.password,
-            self.database,
+            self.host, self.port, self.username, self.password, self.database,
         )
+    }
+
+    pub async fn dump_logs(&self, directory: &std::path::Path) -> anyhow::Result<()> {
+        let stdout = self._container.stdout_to_vec().await?;
+        let stderr = self._container.stderr_to_vec().await?;
+
+        tokio::fs::write(directory.join("postgres.stdout.log"), stdout).await?;
+        tokio::fs::write(directory.join("postgres.stderr.log"), stderr).await?;
+
+        Ok(())
     }
 }
