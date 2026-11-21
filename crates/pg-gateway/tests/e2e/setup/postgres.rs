@@ -11,11 +11,13 @@ pub struct TestPostgres {
     pub password: String,
     pub database: String,
     pub network: String,
+    pub container_name: String,
 }
 
 impl TestPostgres {
-    pub async fn start() -> anyhow::Result<Self> {
-        let network = format!("pg-gateway-{}", uuid::Uuid::new_v4());
+    pub async fn start(test_id: String) -> anyhow::Result<Self> {
+        let network = format!("pg-gateway-network-{}", test_id);
+        let container_name = format!("pg-gateway-postgres-{}", test_id);
         let username = "ats1999".to_string();
         let password = "badboy".to_string();
         let database = "pg_gateway_test".to_string();
@@ -25,6 +27,7 @@ impl TestPostgres {
             .with_user(&username)
             .with_password(&password)
             .with_network(network.clone())
+            .with_container_name(container_name.clone())
             .start()
             .await?;
 
@@ -38,6 +41,7 @@ impl TestPostgres {
             password,
             database,
             network,
+            container_name,
         })
     }
 

@@ -18,17 +18,18 @@ pub struct TestGateway {
 }
 
 impl TestGateway {
-    pub async fn start_single_primary(postgres: &TestPostgres) -> Result<Self> {
+    pub async fn start_single_primary(postgres: &TestPostgres, test_id: String) -> Result<Self> {
         // PostgreSQL is exposed on a dynamically mapped host port.
         // The Gateway container reaches it through Docker Desktop.
         let config = include_str!("../fixtures/gateway.single-primary.hcl");
-        let config = super::config::update_config(config, "host.docker.internal", postgres.port)?;
+        let config = super::config::update_config(config, &postgres.container_name, 5432)?;
 
         println!("Config: {}", config);
-        Self::start(config, postgres.network.clone()).await
+        Self::start(config, postgres.network.clone(), test_id).await
     }
 
-    pub async fn start(config: String, network: String) -> Result<Self> {
+    pub async fn start(config: String, network: String, test_id: String) -> Result<Self> {
+        let container_name = format!("pg-gateway-{}", test_id);
         let container = GenericImage::new(GATEWAY_IMAGE, GATEWAY_TAG)
             .with_exposed_port(GATEWAY_PORT.tcp())
             .with_env_var("PG_GATEWAY_CONFIG", "/etc/pg-gateway/config.hcl")
@@ -36,6 +37,7 @@ impl TestGateway {
             .with_env_var("NO_COLOR", "1")
             .with_env_var("CLICOLOR", "0")
             .with_network(network)
+            .with_container_name(container_name)
             .start()
             .await?;
 
