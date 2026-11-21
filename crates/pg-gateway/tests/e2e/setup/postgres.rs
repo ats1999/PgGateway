@@ -1,0 +1,54 @@
+
+use testcontainers_modules::{
+    postgres::Postgres,
+    testcontainers::{
+        ContainerAsync,
+        runners::AsyncRunner,
+    },
+};
+
+pub struct TestPostgres {
+    _container: ContainerAsync<Postgres>,
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub password: String,
+    pub database: String,
+}
+
+impl TestPostgres {
+    pub async fn start() -> anyhow::Result<Self> {
+        let username = "ats1999".to_string();
+        let password = "badboy".to_string();
+        let database = "pg_gateway".to_string();
+
+        let container = Postgres::default()
+            .with_db_name(&database)
+            .with_user(&username)
+            .with_password(&password)
+            .start()
+            .await?;
+
+        let port = container.get_host_port_ipv4(5432).await?;
+
+        Ok(Self {
+            _container:container,
+            host: "127.0.0.1".to_string(),
+            port,
+            username,
+            password,
+            database,
+        })
+    }
+
+    pub fn connection_string(&self) -> String {
+        format!(
+            "host={} port={} user={} password={} dbname={}",
+            self.host,
+            self.port,
+            self.username,
+            self.password,
+            self.database,
+        )
+    }
+}

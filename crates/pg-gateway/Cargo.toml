@@ -33,6 +33,10 @@ path = "tests/e2e/pool_config_e2e.rs"
 name = "integration_dbname_auth"
 path = "tests/e2e/dbname_auth_e2e.rs"
 
+[[test]]
+name = "e2e"
+path = "tests/e2e/e2e.rs"
+
 [dependencies]
 anyhow = "1"
 bytes = "1"
