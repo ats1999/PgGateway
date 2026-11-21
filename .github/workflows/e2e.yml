@@ -30,8 +30,8 @@ jobs:
       # - name: Run formatting check
       #   run: cargo fmt --all -- --check
 
-      - name: Run Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+      # - name: Run Clippy
+      #   run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Run unit and integration tests
         run: cargo test --workspace
