@@ -27,6 +27,9 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
+      - name: Build PG Gateway Docker image
+        run: docker build -t pg-gateway:latest -f docker/Dockerfile .
+
       # - name: Run formatting check
       #   run: cargo fmt --all -- --check
 
