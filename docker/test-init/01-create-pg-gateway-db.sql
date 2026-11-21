@@ -1,1 +1,0 @@
-CREATE DATABASE "pg-gateway";
