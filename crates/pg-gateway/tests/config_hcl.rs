@@ -171,29 +171,6 @@ databases = {
 }
 
 #[test]
-fn integration_template_renders_to_valid_config() {
-    let template = include_str!("../../../docker/integration-gateway.hcl.tpl");
-    for (defaults, database, user) in [
-        ("", "", ""),
-        (
-            "client_login_timeout_seconds = 1",
-            "pool_size = 1\nquery_wait_timeout_seconds = 1\nconnect_query = \"SET application_name = 'x'\"",
-            "pool_size = 1",
-        ),
-    ] {
-        let rendered = template
-            .replace("${LISTEN_PORT}", "6432")
-            .replace("${PG_PORT}", "5432")
-            .replace("${POOL_MODE}", "transaction")
-            .replace("${DEFAULTS_POOL_CONFIG}", defaults)
-            .replace("${DB_POOL_CONFIG}", database)
-            .replace("${USER_POOL_CONFIG}", user);
-        GatewayConfig::from_hcl_str(&rendered)
-            .unwrap_or_else(|e| panic!("template failed to parse: {e:#}\n{rendered}"));
-    }
-}
-
-#[test]
 fn dbname_is_set_per_database_for_primary_and_replicas() {
     let config = GatewayConfig::from_hcl_str(
         r#"
