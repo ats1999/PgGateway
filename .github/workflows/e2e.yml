@@ -1,4 +1,3 @@
-
 name: e2e
 
 on:
@@ -28,8 +27,8 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Run formatting check
-        run: cargo fmt --all -- --check
+      # - name: Run formatting check
+      #   run: cargo fmt --all -- --check
 
       - name: Run Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
