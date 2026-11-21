@@ -1,5 +1,6 @@
 use std::future::Future;
 use std::net::SocketAddr;
+use std::println;
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::{Duration, Instant};
 
@@ -141,7 +142,12 @@ async fn check_client_password(
 /// Send a FATAL `ErrorResponse`; the caller closes the connection afterwards. Best effort.
 async fn send_fatal(writer: &mut (impl AsyncWrite + Unpin), code: &str, message: &str) {
     let mut body = Vec::new();
-    for (field, value) in [(b'S', "FATAL"), (b'V', "FATAL"), (b'C', code), (b'M', message)] {
+    for (field, value) in [
+        (b'S', "FATAL"),
+        (b'V', "FATAL"),
+        (b'C', code),
+        (b'M', message),
+    ] {
         body.push(field);
         body.extend_from_slice(value.as_bytes());
         body.push(0);
@@ -235,7 +241,11 @@ pub async fn serve_connection(
 
     // Before startup we don't know the user/database yet: only `pool_defaults` applies.
     let startup_limit = gateway.config.startup_settings().client_login_timeout;
-    let identity = match until(startup_limit.map(|d| started + d), client.complete_startup()).await
+    let identity = match until(
+        startup_limit.map(|d| started + d),
+        client.complete_startup(),
+    )
+    .await
     {
         Some(result) => result.context("client startup")?,
         None => {
@@ -246,6 +256,7 @@ pub async fn serve_connection(
     };
 
     let login_deadline_at = startup_limit.map(|d| started + d);
+    println!("id.db {}, id.user {}", &identity.database, &identity.user);
     if gateway.config.is_admin_database(&identity.database) {
         if !gateway.config.allows_admin_client(&identity.user) {
             send_fatal(
@@ -271,7 +282,10 @@ pub async fn serve_connection(
         return serve_admin_connection(client, peer, gateway, identity, client_guard).await;
     }
 
-    if !gateway.config.allows_client(&identity.user, &identity.database) {
+    if !gateway
+        .config
+        .allows_client(&identity.user, &identity.database)
+    {
         send_fatal(
             client.stream_mut(),
             sqlstate::INVALID_AUTHORIZATION,
@@ -295,7 +309,13 @@ pub async fn serve_connection(
         .user_password(&identity.database, &identity.user)
         .context("allowed user has no password")?
         .to_string();
-    check_client_password(&mut client, &identity.user, &gateway_password, login_deadline_at).await?;
+    check_client_password(
+        &mut client,
+        &identity.user,
+        &gateway_password,
+        login_deadline_at,
+    )
+    .await?;
 
     let max_clients = gateway
         .config
@@ -312,7 +332,12 @@ pub async fn serve_connection(
             max_clients.unwrap_or(0),
             identity.database
         );
-        send_fatal(client.stream_mut(), sqlstate::TOO_MANY_CONNECTIONS, &message).await;
+        send_fatal(
+            client.stream_mut(),
+            sqlstate::TOO_MANY_CONNECTIONS,
+            &message,
+        )
+        .await;
         bail!("{message}");
     };
 
@@ -340,11 +365,7 @@ pub async fn serve_connection(
     let (mut client_read, mut client_write) = client.into_split();
     let mut client_frames = FrameReader::new();
 
-    let first = until(
-        login_deadline,
-        first_checkout(&mut client_write, &session),
-    )
-    .await;
+    let first = until(login_deadline, first_checkout(&mut client_write, &session)).await;
     let (upstream, mut checkout) = match first {
         Some(Ok(pair)) => pair,
         Some(Err(error)) => return Err(error),
@@ -391,7 +412,10 @@ pub async fn serve_connection(
 
         // Transaction/statement mode: hold no upstream until the client sends something.
         session.guard.set_state(ClientState::Idle);
-        let idle_deadline = session.limits.client_idle_timeout.map(|d| Instant::now() + d);
+        let idle_deadline = session
+            .limits
+            .client_idle_timeout
+            .map(|d| Instant::now() + d);
         let pending = match until(idle_deadline, client_frames.next(&mut client_read)).await {
             None => {
                 let (code, message) = SessionTimeout::ClientIdle.report(&session.limits);
@@ -445,7 +469,12 @@ async fn first_checkout(
     let checkout = match session.gateway.pools.checkout(&session.key).await {
         Ok(checkout) => checkout,
         Err(error) => {
-            send_fatal(client_write, sqlstate::PROTOCOL_VIOLATION, &format!("{error:#}")).await;
+            send_fatal(
+                client_write,
+                sqlstate::PROTOCOL_VIOLATION,
+                &format!("{error:#}"),
+            )
+            .await;
             return Err(error);
         }
     };
@@ -472,16 +501,23 @@ async fn first_checkout(
             .await
             {
                 Ok((server, auth_flight)) => {
-                    ClientConnection::replay_auth_flight_to_client_write(client_write, &auth_flight)
-                        .await?;
+                    ClientConnection::replay_auth_flight_to_client_write(
+                        client_write,
+                        &auth_flight,
+                    )
+                    .await?;
                     let mut conn = slot.attach(server.into_tcp(), auth_flight);
                     let stream = conn.take_stream();
                     Ok((stream, conn))
                 }
                 Err(error) => {
                     slot.login_failed();
-                    send_fatal(client_write, sqlstate::CANNOT_CONNECT_NOW, &format!("{error:#}"))
-                        .await;
+                    send_fatal(
+                        client_write,
+                        sqlstate::CANNOT_CONNECT_NOW,
+                        &format!("{error:#}"),
+                    )
+                    .await;
                     Err(error)
                 }
             }
@@ -552,7 +588,10 @@ async fn relay(
         (checkout.state == ConnectionState::InTransaction).then(Instant::now);
 
     if let Some(frame) = pending {
-        server_write.write_all(&frame).await.context("forward to upstream")?;
+        server_write
+            .write_all(&frame)
+            .await
+            .context("forward to upstream")?;
         note_client_message(frame[0], &mut outstanding, &mut unsynced);
         client_sent = true;
     }
@@ -712,7 +751,10 @@ mod tests {
         let now = Instant::now();
         let (_, kind) = next_deadline(&l, false, false, now, None).unwrap();
         assert_eq!(kind, SessionTimeout::ClientIdle);
-        assert!(next_deadline(&l, true, false, now, None).is_none(), "busy: no idle timeout");
+        assert!(
+            next_deadline(&l, true, false, now, None).is_none(),
+            "busy: no idle timeout"
+        );
         let (_, kind) = next_deadline(&l, false, true, now, Some(now)).unwrap();
         assert_eq!(kind, SessionTimeout::IdleInTransaction);
     }
@@ -751,12 +793,21 @@ mod tests {
 
     #[test]
     fn release_rules_per_mode() {
-        assert!(!should_release_upstream(PoolMode::Session, TransactionStatus::Idle));
-        assert!(should_release_upstream(PoolMode::Transaction, TransactionStatus::Idle));
+        assert!(!should_release_upstream(
+            PoolMode::Session,
+            TransactionStatus::Idle
+        ));
+        assert!(should_release_upstream(
+            PoolMode::Transaction,
+            TransactionStatus::Idle
+        ));
         assert!(!should_release_upstream(
             PoolMode::Transaction,
             TransactionStatus::InTransaction
         ));
-        assert!(should_release_upstream(PoolMode::Statement, TransactionStatus::Idle));
+        assert!(should_release_upstream(
+            PoolMode::Statement,
+            TransactionStatus::Idle
+        ));
     }
 }

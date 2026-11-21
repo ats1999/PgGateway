@@ -23,3 +23,5 @@ EXPOSE 6432
 ENV PG_GATEWAY_CONFIG=/etc/pg-gateway/config.hcl
 
 ENTRYPOINT ["pg-gateway"]
+
+# docker build -t pg-gateway:latest -f docker/Dockerfile .

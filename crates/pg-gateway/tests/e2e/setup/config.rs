@@ -6,15 +6,15 @@ pub fn update_config(config: &str, host: &str, port: u16) -> Result<String> {
 
     let root = config.as_object_mut().context("Expected root HCL object")?;
 
-    // Traverse databases.pg_gateway.primary
+    // Traverse databases.pg_gateway_test.primary
     let primary = root
         .get_mut("databases")
         .and_then(Value::as_object_mut)
-        .and_then(|databases| databases.get_mut("pg_gateway"))
+        .and_then(|databases| databases.get_mut("pg_gateway_test"))
         .and_then(Value::as_object_mut)
         .and_then(|database| database.get_mut("primary"))
         .and_then(Value::as_object_mut)
-        .context("Missing databases.pg_gateway.primary configuration")?;
+        .context("Missing databases.pg_gateway_test.primary configuration")?;
 
     primary.insert("host".into(), Value::from(host));
     primary.insert("port".into(), Value::from(port));

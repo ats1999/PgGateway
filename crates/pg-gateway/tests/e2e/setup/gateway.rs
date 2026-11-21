@@ -50,7 +50,7 @@ impl TestGateway {
 
     pub fn connection_string(&self) -> String {
         format!(
-            "host={} port={} user=ats1999 password=badboy dbname=pg_gateway",
+            "host={} port={} user=ats1999 password=badboy dbname=pg_gateway_test",
             self.host, self.port
         )
     }

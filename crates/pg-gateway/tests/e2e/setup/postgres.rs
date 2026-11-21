@@ -16,7 +16,7 @@ impl TestPostgres {
     pub async fn start() -> anyhow::Result<Self> {
         let username = "ats1999".to_string();
         let password = "badboy".to_string();
-        let database = "pg_gateway".to_string();
+        let database = "pg_gateway_test".to_string();
 
         let container = Postgres::default()
             .with_db_name(&database)

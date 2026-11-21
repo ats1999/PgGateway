@@ -7,8 +7,8 @@ pool_defaults = {
 }
 
 databases = {
-  pg_gateway = {
-    dbname = "pg_gateway"
+  pg_gateway_test = {
+    dbname = "pg_gateway_test"
 
     primary = {
       host = "127.0.0.1"
