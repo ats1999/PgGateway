@@ -25,16 +25,17 @@ impl TestGateway {
         let config = super::config::update_config(config, "host.docker.internal", postgres.port)?;
 
         println!("Config: {}", config);
-        Self::start(config).await
+        Self::start(config, postgres.network.clone()).await
     }
 
-    pub async fn start(config: String) -> Result<Self> {
+    pub async fn start(config: String, network: String) -> Result<Self> {
         let container = GenericImage::new(GATEWAY_IMAGE, GATEWAY_TAG)
             .with_exposed_port(GATEWAY_PORT.tcp())
             .with_env_var("PG_GATEWAY_CONFIG", "/etc/pg-gateway/config.hcl")
             .with_copy_to("/etc/pg-gateway/config.hcl", config.into_bytes())
             .with_env_var("NO_COLOR", "1")
             .with_env_var("CLICOLOR", "0")
+            .with_network(network)
             .start()
             .await?;
 

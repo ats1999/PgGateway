@@ -14,7 +14,7 @@ async fn gateway_connects_to_postgres() -> Result<()> {
         gateway,
         |context| async move {
             println!("connection string {}", context.gateway.connection_string());
-            
+
             let (client, connection) = tokio_postgres::connect(
                 &context.gateway.connection_string(),
                 tokio_postgres::NoTls,

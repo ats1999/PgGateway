@@ -1,6 +1,6 @@
 use testcontainers_modules::{
     postgres::Postgres,
-    testcontainers::{runners::AsyncRunner, ContainerAsync},
+    testcontainers::{runners::AsyncRunner, ContainerAsync, ImageExt},
 };
 
 pub struct TestPostgres {
@@ -10,10 +10,12 @@ pub struct TestPostgres {
     pub username: String,
     pub password: String,
     pub database: String,
+    pub network: String,
 }
 
 impl TestPostgres {
     pub async fn start() -> anyhow::Result<Self> {
+        let network = format!("pg-gateway-{}", uuid::Uuid::new_v4());
         let username = "ats1999".to_string();
         let password = "badboy".to_string();
         let database = "pg_gateway_test".to_string();
@@ -22,6 +24,7 @@ impl TestPostgres {
             .with_db_name(&database)
             .with_user(&username)
             .with_password(&password)
+            .with_network(network.clone())
             .start()
             .await?;
 
@@ -34,6 +37,7 @@ impl TestPostgres {
             username,
             password,
             database,
+            network,
         })
     }
 
