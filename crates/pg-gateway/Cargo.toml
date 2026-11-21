@@ -58,3 +58,5 @@ tokio = { version = "1", features = ["full"] }
 tokio-postgres = "0.7"
 anyhow = "1"
 testcontainers-modules = { version = "0.15.0", features = ["postgres"] }
+tempfile = "3.27.0"
+hcl-rs = "0.18"
