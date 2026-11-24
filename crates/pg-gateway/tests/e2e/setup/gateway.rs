@@ -18,14 +18,17 @@ pub struct TestGateway {
 }
 
 impl TestGateway {
-    pub async fn start_single_primary(postgres: &TestPostgres, test_id: String) -> Result<Self> {
+    /// Start the gateway with `config` (single-primary HCL), pointed at `postgres`.
+    pub async fn start_single_primary(
+        postgres: &TestPostgres,
+        test_id: String,
+        config: &str,
+    ) -> Result<Self> {
         // Gateway and Postgres share `postgres.network`. Upstream uses Docker DNS on the
         // internal port (5432), not host.docker.internal (breaks on Linux CI).
-        let config = include_str!("../fixtures/gateway.single-primary.hcl");
         let config =
             super::config::update_config(config, &postgres.upstream_host, 5432)?;
 
-        println!("Config: {}", config);
         Self::start(config, postgres.network.clone(), test_id).await
     }
 
@@ -55,6 +58,14 @@ impl TestGateway {
     pub fn connection_string(&self) -> String {
         format!(
             "host={} port={} user=ats1999 password=badboy dbname=pg_gateway_test",
+            self.host, self.port
+        )
+    }
+
+    /// The gateway's admin console (users come from the fixture's `postgres` userlist).
+    pub fn admin_connection_string(&self) -> String {
+        format!(
+            "host={} port={} user=ats1999 password=badboy dbname=pg_gateway",
             self.host, self.port
         )
     }

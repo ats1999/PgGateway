@@ -4,7 +4,8 @@ use anyhow::Result;
 
 #[tokio::test]
 async fn gateway_connects_to_postgres() -> Result<()> {
-    super::setup::runner::run("gateway_connects_to_postgres", |context| async move {
+    let config = super::setup::config::SINGLE_PRIMARY;
+    super::setup::runner::run("gateway_connects_to_postgres", config, |context| async move {
         println!("connection string {}", context.gateway.connection_string());
 
         let (client, connection) =

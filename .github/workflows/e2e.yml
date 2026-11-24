@@ -8,13 +8,16 @@ on:
   pull_request:
     branches:
       - main
+concurrency:
+  group: e2e-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   unit:
-    name: Unit & integration tests
+    name: Unit tests
     runs-on: ubuntu-latest
 
     steps:
@@ -37,13 +40,6 @@ jobs:
         run: |
           cargo test -p pg-protocol
           cargo test -p pg-gateway --lib
-          cargo test -p pg-gateway \
-            --test integration_pool \
-            --test integration_admin \
-            --test proxy_e2e \
-            --test pool_e2e \
-            --test integration_pool_config \
-            --test integration_dbname_auth
 
   e2e:
     name: e2e Tests

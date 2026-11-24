@@ -1,6 +1,9 @@
 use anyhow::{Context, Result};
 use hcl::{from_str, to_string, Value};
 
+/// Gateway config: one primary, database `pg_gateway_test`, session mode.
+pub const SINGLE_PRIMARY: &str = include_str!("../fixtures/gateway.single-primary.hcl");
+
 pub fn update_config(config: &str, host: &str, port: u16) -> Result<String> {
     let mut config: Value = from_str(config).context("Failed to parse HCL configuration")?;
 

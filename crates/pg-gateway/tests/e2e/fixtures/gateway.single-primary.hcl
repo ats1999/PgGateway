@@ -27,4 +27,16 @@ databases = {
       { name = "ats1999", password = "badboy" }
     ]
   }
+
+  # Admin console users (dbname=pg_gateway): pg-gateway reads them from the `postgres` entry.
+  postgres = {
+    primary = {
+      host = "postgres"
+      port = 5432
+    }
+
+    userlist = [
+      { name = "ats1999", password = "badboy" }
+    ]
+  }
 }

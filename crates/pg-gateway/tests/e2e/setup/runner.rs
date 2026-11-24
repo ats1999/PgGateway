@@ -3,14 +3,17 @@ use std::{future::Future, sync::Arc};
 
 use super::test_context::TestContext;
 
-pub async fn run<F, Fut>(test_name: &str, test: F) -> Result<()>
+/// Run `test` against a fresh Postgres and a gateway started with `config` (gateway HCL, e.g.
+/// [`super::config::SINGLE_PRIMARY`]; the upstream host/port are filled in here).
+pub async fn run<F, Fut>(test_name: &str, config: &str, test: F) -> Result<()>
 where
     F: FnOnce(Arc<TestContext>) -> Fut,
     Fut: Future<Output = Result<()>>,
 {
     let test_id = uuid::Uuid::new_v4().to_string();
     let postgres = super::postgres::TestPostgres::start(test_id.clone()).await?;
-    let gateway = super::gateway::TestGateway::start_single_primary(&postgres, test_id).await?;
+    let gateway =
+        super::gateway::TestGateway::start_single_primary(&postgres, test_id, config).await?;
 
     let context = Arc::new(TestContext::start(test_name, postgres, gateway).await?);
 

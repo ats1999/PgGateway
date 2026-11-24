@@ -3,6 +3,8 @@ use testcontainers_modules::{
     testcontainers::{runners::AsyncRunner, ContainerAsync, ImageExt},
 };
 
+use super::pg_log::{self, LoggedStatement};
+
 /// Docker DNS name for Postgres on the shared test network (reachable from the gateway container).
 pub const POSTGRES_UPSTREAM_HOST: &str = "postgres";
 
@@ -34,6 +36,9 @@ impl TestPostgres {
             .with_network(network.clone())
             .with_container_name(container_name.clone())
             .with_hostname(POSTGRES_UPSTREAM_HOST)
+            // Every statement is logged with its backend pid (`log_line_prefix` = '%m [%p] '),
+            // so tests can check which server connection ran what.
+            .with_cmd(["-c", "fsync=off", "-c", "log_statement=all"])
             .start()
             .await?;
 
@@ -57,6 +62,22 @@ impl TestPostgres {
             "host={} port={} user={} password={} dbname={}",
             self.host, self.port, self.username, self.password, self.database,
         )
+    }
+
+    /// Everything Postgres has logged so far (it logs to stderr).
+    pub async fn logs(&self) -> anyhow::Result<String> {
+        let stderr = self._container.stderr_to_vec().await?;
+        let stdout = self._container.stdout_to_vec().await?;
+        Ok(format!(
+            "{}{}",
+            String::from_utf8_lossy(&stderr),
+            String::from_utf8_lossy(&stdout)
+        ))
+    }
+
+    /// Statements Postgres has logged so far (`log_statement = all`), in order.
+    pub async fn statements(&self) -> anyhow::Result<Vec<LoggedStatement>> {
+        Ok(pg_log::parse(&self.logs().await?))
     }
 
     pub async fn dump_logs(&self, directory: &std::path::Path) -> anyhow::Result<()> {
