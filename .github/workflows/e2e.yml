@@ -13,31 +13,54 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  test:
-    name: Rust Tests
+  unit:
+    name: Unit & integration tests
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache Cargo dependencies
-        uses: Swatinem/rust-cache@v2
-
-      - name: Build PG Gateway Docker image
-        run: docker build -t pg-gateway:latest -f docker/Dockerfile .
+      - name: Set up Rust
+        uses: ./.github/actions/rust-toolchain
 
       # - name: Run formatting check
       #   run: cargo fmt --all -- --check
+      #   shell: bash
 
       # - name: Run Clippy
-      #   run: cargo clippy --workspace --all-targets -- -D warnings
+      #   run: cargo clippy --workspace --all-targets -- -- -D warnings
+      #   shell: bash
 
-      - name: Run unit and integration tests
-        run: cargo test --workspace
+      - name: Unit Tests
+        shell: bash
+        run: |
+          cargo test -p pg-protocol
+          cargo test -p pg-gateway --lib
+          cargo test -p pg-gateway \
+            --test integration_pool \
+            --test integration_admin \
+            --test proxy_e2e \
+            --test pool_e2e \
+            --test integration_pool_config \
+            --test integration_dbname_auth
+
+  e2e:
+    name: e2e Tests
+    runs-on: ubuntu-latest
+    needs: unit
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: ./.github/actions/rust-toolchain
+
+      - name: Build PG Gateway Docker image
+        shell: bash
+        run: docker build -t pg-gateway:latest -f docker/Dockerfile .
 
       - name: Run E2E tests
+        shell: bash
         run: cargo test -p pg-gateway --test e2e -- --nocapture
