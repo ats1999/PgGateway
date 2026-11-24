@@ -3,6 +3,9 @@ use testcontainers_modules::{
     testcontainers::{runners::AsyncRunner, ContainerAsync, ImageExt},
 };
 
+/// Docker DNS name for Postgres on the shared test network (reachable from the gateway container).
+pub const POSTGRES_UPSTREAM_HOST: &str = "postgres";
+
 pub struct TestPostgres {
     _container: ContainerAsync<Postgres>,
     pub host: String,
@@ -12,6 +15,8 @@ pub struct TestPostgres {
     pub database: String,
     pub network: String,
     pub container_name: String,
+    /// Hostname the gateway container should use for the upstream Postgres (same Docker network).
+    pub upstream_host: String,
 }
 
 impl TestPostgres {
@@ -28,6 +33,7 @@ impl TestPostgres {
             .with_password(&password)
             .with_network(network.clone())
             .with_container_name(container_name.clone())
+            .with_hostname(POSTGRES_UPSTREAM_HOST)
             .start()
             .await?;
 
@@ -42,6 +48,7 @@ impl TestPostgres {
             database,
             network,
             container_name,
+            upstream_host: POSTGRES_UPSTREAM_HOST.to_string(),
         })
     }
 

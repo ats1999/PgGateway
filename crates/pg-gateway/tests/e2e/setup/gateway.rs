@@ -19,10 +19,11 @@ pub struct TestGateway {
 
 impl TestGateway {
     pub async fn start_single_primary(postgres: &TestPostgres, test_id: String) -> Result<Self> {
-        // PostgreSQL is exposed on a dynamically mapped host port.
-        // The Gateway container reaches it through Docker Desktop.
+        // Gateway and Postgres share `postgres.network`. Upstream uses Docker DNS on the
+        // internal port (5432), not host.docker.internal (breaks on Linux CI).
         let config = include_str!("../fixtures/gateway.single-primary.hcl");
-        let config = super::config::update_config(config, &postgres.container_name, 5432)?;
+        let config =
+            super::config::update_config(config, &postgres.upstream_host, 5432)?;
 
         println!("Config: {}", config);
         Self::start(config, postgres.network.clone(), test_id).await
